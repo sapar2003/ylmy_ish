@@ -6,7 +6,10 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import session as db_session
 from app.db.base import Base
+from app.core.config import settings
 from app.main import app
+
+client_session_factory = []  # test maglumatlaryny göni ýazmak üçin (meselem, seed)
 
 
 @pytest.fixture
@@ -22,7 +25,11 @@ def client():
             yield db
 
     app.dependency_overrides[db_session.get_db] = override
+    app.dependency_overrides[db_session.get_session_factory] = lambda: TestSession
+    settings.generation_in_background = False
+    client_session_factory.append(TestSession)
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    client_session_factory.clear()
     engine.dispose()
