@@ -1,6 +1,7 @@
 """Demo maglumatlar: iki fakultet, iki smena, umumy mugallymlar, potok we bölünýän sapaklar.
 
 Işletmek: `python -m app.seed` (baza boş bolmalydyr; `--reset` ähli maglumatlary pozup täzeden ýazýar).
+`--dataset iogu`: Halkara nebit we gaz uniwersitetiniň fakultetleri we kafedralary (app/seed_iogu.py).
 """
 import argparse
 import sys
@@ -145,6 +146,8 @@ def seed(db: Session) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset", action="store_true", help="ähli tablisalary arassalap täzeden ýazmak")
+    parser.add_argument("--dataset", choices=["demo", "iogu"], default="demo",
+                        help="demo: kiçi synag maglumatlary; iogu: Halkara nebit we gaz uniwersiteti")
     parser.add_argument("--if-empty", action="store_true", help="baza boş bolsa ýazmak, bolmasa hiç zat etmezlik")
     args = parser.parse_args()
     with SessionLocal() as db:
@@ -157,8 +160,13 @@ def main() -> None:
             if args.if_empty:
                 return
             sys.exit("Bazada eýýäm maglumat bar. Täzeden ýazmak üçin: python -m app.seed --reset")
-        seed(db)
-    print("Demo maglumatlar ýazyldy.")
+        if args.dataset == "iogu":
+            from app.seed_iogu import seed_iogu
+
+            seed_iogu(db)
+        else:
+            seed(db)
+    print(f"Maglumatlar ýazyldy ({args.dataset}).")
 
 
 if __name__ == "__main__":
