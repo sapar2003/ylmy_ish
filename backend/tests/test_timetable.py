@@ -65,7 +65,7 @@ def test_iogu_dataset_generates_without_conflicts(client):
     with client_session_factory[0]() as db:
         seed_iogu(db)
     faculties = client.get("/api/v1/faculties").json()["items"]
-    assert len(faculties) == 8
+    assert len(faculties) == 7
     assert client.get("/api/v1/timetables/precheck").json()["issues"] == []
 
     r = client.post("/api/v1/timetables", json={"name": "HNGU", "time_limit_seconds": 60})

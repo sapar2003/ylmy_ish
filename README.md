@@ -106,7 +106,7 @@ Solwerden öň `GET /api/v1/timetables/precheck` aç-açan mümkin däl ýagdaý
 Demo maglumatlar: `python -m app.seed` (`--reset` täzeden ýazýar).
 
 Halkara nebit we gaz uniwersitetiniň maglumatlary: `python -m app.seed --reset --dataset iogu`.
-Fakultetler we kafedralar resmi sahypadan ([iogu.edu.tm](https://iogu.edu.tm/articles/73)) alyndy;
+Fakultetler we kafedralar (Balkanabat bölüminden başgasy) resmi sahypadan ([iogu.edu.tm](https://iogu.edu.tm/articles/73)) alyndy;
 hünärleriň köpüsi, toparlar, mugallymlar, otaglar we okuw meýilnamasy synag üçin oýlanyp tapyldy
 (`backend/app/seed_iogu.py`), olary UI-da hakyky maglumatlar bilen çalyşyň.
 

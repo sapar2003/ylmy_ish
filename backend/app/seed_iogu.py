@@ -1,8 +1,8 @@
 """Ýagşygeldi Kakaýew adyndaky Halkara nebit we gaz uniwersiteti (HNGU) üçin başlangyç maglumatlar.
 
 Fakultetler we kafedralar uniwersitetiň resmi sahypasyndan alyndy (iogu.edu.tm/articles/73, 2026-10-21).
-Hünärleriň bir bölegi sahypalardan (Balkanabat bölümi: iogu.edu.tm/faculties/39, WHED), galanlary kafedralaryň
-ugruna görä çaklanyp goşuldy. Toparlar, mugallymlar, otaglar we okuw meýilnamasy diňe synag üçin
+Balkanabat bölümi bilkastlaýyn goşulmady. Hünärler kafedralaryň ugruna görä çaklanyp goşuldy
+(magistratura: WHED). Toparlar, mugallymlar, otaglar we okuw meýilnamasy diňe synag üçin
 oýlanyp tapyldy: olary UI-da hakyky maglumatlar bilen çalyşyň.
 """
 from datetime import time
@@ -56,13 +56,6 @@ FACULTIES = {
         "Informatika we maglumat tehnologiýalary kafedrasy",
         "Häzirki zaman kompýuter tehnologiýalary kafedrasy",
     ],
-    ("Nebit senagaty fakulteti (Balkanabat bölümi)", "BN"): [
-        "Geologiýa we geofizika kafedrasy (Balkanabat)",
-        "Nebitsenagat enjamlary kafedrasy",
-        "Nebit we gaz guýularyny burawlamak kafedrasy (Balkanabat)",
-        "Umumy tehniki dersler kafedrasy",
-        "Himiýa we energetika kafedrasy",
-    ],
     ("Hünär derejesini ýokarlandyryş fakulteti", "HY"): [],
 }
 
@@ -82,7 +75,6 @@ SPECIALTIES = [
     ("Logistika", "LG", "Logistika kafedrasy", "bachelor", "öýlän", [(1, 22)]),
     ("Kiberhowpsuzlyk", "KH", "Kiberhowpsuzlyk kafedrasy", "bachelor", "irden", [(1, 20)]),
     ("Maglumat tehnologiýalary", "MT", "Informatika we maglumat tehnologiýalary kafedrasy", "bachelor", "irden", [(1, 22)]),
-    ("Elektrik üpjünçiligi (Balkanabat)", "BEÜ", "Himiýa we energetika kafedrasy", "bachelor", "irden", [(1, 18)]),
 ]
 
 # Umumy dersler: kafedra, ders, sapak görnüşi, hepdede, bölünýärmi, otag görnüşi, mugallymlar.
