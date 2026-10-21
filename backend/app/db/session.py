@@ -30,3 +30,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def get_db() -> Iterator[Session]:
     with SessionLocal() as db:
         yield db
+
+
+def get_session_factory() -> sessionmaker:
+    return SessionLocal

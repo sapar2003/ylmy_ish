@@ -8,10 +8,12 @@ from app.models.resources import (
     TeacherAvailability,
     TimeSlot,
 )
+from app.models.timetable import Timetable, TimetableEntry, TimetableStatus
 from app.models.structure import Department, Faculty, Group, Shift, Specialty, StudyLevel, Subgroup
 
 __all__ = [
     "AvailabilityStatus", "Building", "CurriculumItem", "Department", "Faculty", "Group", "LessonType",
     "Room", "RoomType", "Shift", "Specialty", "Stream", "StudyLevel", "Subgroup", "Subject", "Teacher",
-    "TeacherAvailability", "TeachingAssignment", "TimeSlot", "stream_groups",
+    "TeacherAvailability", "TeachingAssignment", "TimeSlot", "Timetable", "TimetableEntry",
+    "TimetableStatus", "stream_groups",
 ]

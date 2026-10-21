@@ -6,15 +6,27 @@ Backend: FastAPI (Python), maglumat bazasy: PostgreSQL, frontend: Flutter, solwe
 ## Gurluş
 
 ```
-backend/   FastAPI API (gurluş, resurslar, okuw meýilnamasy)
-frontend/  Flutter programmasy (soňra)
-solver/    Raspisaniýe algoritmi (soňra)
+backend/   FastAPI API (gurluş, resurslar, okuw meýilnamasy, raspisaniýe)
+backend/app/solver/  Raspisaniýe algoritmi (OR-Tools CP-SAT)
+frontend/  Flutter programmasy (web, Windows, Android)
 ```
 
 Ähli sanawlar ulanyjy tarapyndan dolandyrylýar: fakultetleri, kafedralary, toparlary we beýlekileri
 islendik sanda goşup, üýtgedip, aýryp bolýar. Kodda hiç bir fakultet berkidilmeýär.
 
-## Işe girizmek
+## Windows-da çalt işletmek (SQLite, PostgreSQL gerek däl)
+
+Python 3.12+ gerek. Flutter web build `frontend/build/web` bukjasynda bolmaly
+(`cd frontend && flutter build web --no-web-resources-cdn`).
+
+```
+start.bat
+```
+
+Ilkinji gezek demo maglumatlar (2 fakultet, 6 topar, 7 mugallym) ýazylýar we brauzerde
+http://localhost:8000 açylýar. "Awtomat düz" düwmesi raspisaniýäni düzýär.
+
+## Docker bilen işletmek
 
 ```bash
 docker compose up --build
@@ -71,6 +83,27 @@ Okuw meýilnamasynyň düzgünleri:
 - `split: true` bolsa sapak kiçi toparlara bölünýär: her kiçi topar üçin aýratyn mugallym bellenýär
   (mugallym şol bir adam ýa-da dürli bolup biler). Potok sapagy bölünmeýär.
 - Bölünmeýän sapaga diňe bir mugallym bellenýär.
+
+## Raspisaniýe algoritmi
+
+`backend/app/solver/` maglumat bazasyna bagly däl. Iki tapgyrda işleýär:
+
+1. **Wagt** (CP-SAT): gaty şertler: mugallym, topar, kiçi topar bir wagtda diňe bir sapakda
+   (ähli fakultetler boýunça), topar diňe öz smenasynda, mugallym diňe boş wagtynda, günlük çäk,
+   her slotda ýeterlik laýyk otag. Ýumşak şertler: bir ders bir günde iki gezek bolmasyn,
+   mugallymyň isleýän wagty, sapaklar irki jübütlerde.
+2. **Otag**: her slotda sapaklara sygymy we görnüşi laýyk otag, boş galýan orun az bolar ýaly.
+
+Solwerden öň `GET /api/v1/timetables/precheck` aç-açan mümkin däl ýagdaýlary görkezýär.
+
+| Endpoint | Näme edýär |
+| --- | --- |
+| `GET /api/v1/timetables/precheck` | Maglumatlary barlaýar |
+| `POST /api/v1/timetables` | Täze raspisaniýe düzüp başlaýar (fonda) |
+| `GET /api/v1/timetables/{id}` | Ýagdaýy: `running`, `done`, `failed` we meseleler |
+| `GET /api/v1/timetables/{id}/entries?group_id=` | Topar (ýa-da `teacher_id`, `room_id`) boýunça sapaklar |
+
+Demo maglumatlar: `python -m app.seed` (`--reset` täzeden ýazýar).
 
 ## Testler
 
