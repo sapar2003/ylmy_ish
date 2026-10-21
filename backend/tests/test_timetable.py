@@ -57,3 +57,20 @@ def test_generation_fails_cleanly_without_data(client):
     assert tt["status"] == "failed"
     assert tt["issues"]
     assert client.delete(f"/api/v1/timetables/{tt['id']}").status_code == 204
+
+
+def test_iogu_dataset_generates_without_conflicts(client):
+    from app.seed_iogu import seed_iogu
+
+    with client_session_factory[0]() as db:
+        seed_iogu(db)
+    faculties = client.get("/api/v1/faculties").json()["items"]
+    assert len(faculties) == 7
+    assert client.get("/api/v1/timetables/precheck").json()["issues"] == []
+
+    r = client.post("/api/v1/timetables", json={"name": "HNGU", "time_limit_seconds": 60})
+    tt = client.get(f"/api/v1/timetables/{r.json()['id']}").json()
+    assert tt["status"] == "done", tt["issues"]
+    entries = client.get(f"/api/v1/timetables/{tt['id']}/entries").json()
+    assert max(Counter((e["teacher"]["id"], e["time_slot_id"]) for e in entries).values()) == 1
+    assert max(Counter((e["room"]["id"], e["time_slot_id"]) for e in entries).values()) == 1
