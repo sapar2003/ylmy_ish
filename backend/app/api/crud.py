@@ -2,6 +2,7 @@
 
 Täze sanaw goşmak = model + schema + `build_crud_router(...)` bilen bir setir.
 """
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -32,7 +33,24 @@ def _integrity_error(exc: IntegrityError, deleting: bool) -> HTTPException:
                 "Bu ýazga başga ýazgylar bagly (meselem, fakultetde kafedra bar). Ilki olary aýyryň.",
             )
         return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Görkezilen baglanyşyk (…_id) tapylmady.")
+    if "check constraint" in msg or "violates check" in msg:
+        return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Maglumatlar biri-birine laýyk däl.")
     return HTTPException(status.HTTP_409_CONFLICT, "Şeýle ýazga eýýäm bar (ady ýa-da kody gaýtalanýar).")
+
+
+def commit_or_raise(db: Session, deleting: bool = False) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise _integrity_error(exc, deleting) from exc
+
+
+def get_or_404(db: Session, model: type[Base], item_id: int, label: str) -> Any:
+    obj = db.get(model, item_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"{label}: id={item_id} tapylmady.")
+    return obj
 
 
 def build_crud_router(
@@ -44,26 +62,43 @@ def build_crud_router(
     prefix: str,
     tag: str,
     filters: tuple[str, ...] = (),
+    search_field: str | None = "name",
+    order_by: tuple[str, ...] = ("name",),
+    router: APIRouter | None = None,
+    apply: Callable[[Session, Any, dict[str, Any]], None] | None = None,
+    validate: Callable[[Session, Any], None] | None = None,
 ) -> APIRouter:
-    router = APIRouter(prefix=prefix, tags=[tag])
+    """`router` berilse, CRUD şol routere goşulýar (goşmaça endpointler bilen birlikde).
 
-    def get_or_404(db: Session, item_id: int) -> Any:
-        obj = db.get(model, item_id)
-        if obj is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"{tag}: id={item_id} tapylmady.")
+    `apply(db, obj, data)` maglumaty obýekte geçirýär (meselem, id sanawyny baglanyşyga öwürmek);
+    `validate(db, obj)` ýatda saklamazdan öň barlaýar we ýalňyşlykda HTTPException atýar.
+    """
+
+    def apply_data(db: Session, obj: Any, data: dict[str, Any]) -> None:
+        if apply:
+            apply(db, obj, data)
+        else:
+            for key, value in data.items():
+                setattr(obj, key, value)
+
+    def save(db: Session, obj: Any) -> Any:
+        if validate:
+            with db.no_autoflush:
+                validate(db, obj)
+        db.add(obj)
+        commit(db)
+        db.refresh(obj)
         return obj
+    router = router or APIRouter(prefix=prefix, tags=[tag])
+    commit = commit_or_raise
 
-    def commit(db: Session, deleting: bool = False) -> None:
-        try:
-            db.commit()
-        except IntegrityError as exc:
-            db.rollback()
-            raise _integrity_error(exc, deleting) from exc
+    def get_item_or_404(db: Session, item_id: int) -> Any:
+        return get_or_404(db, model, item_id, tag)
 
     # Süzgüçler (meselem ?faculty_id=3) query model hökmünde yglan edilýär, OpenAPI-de görünýär.
     filter_model = create_model(
         f"{model.__name__}Filters",
-        q=(str | None, Field(None, description="Ady boýunça gözleg")),
+        **({"q": (str | None, Field(None, description="Ady boýunça gözleg"))} if search_field else {}),
         limit=(int, Field(50, ge=1, le=500)),
         offset=(int, Field(0, ge=0)),
         **{f: (int | None, None) for f in filters},
@@ -72,14 +107,15 @@ def build_crud_router(
     @router.get("", response_model=Page[read_schema])
     def list_items(db: DbSession, params: Annotated[filter_model, Query()]):  # type: ignore[valid-type]
         stmt = select(model)
-        if params.q:
-            stmt = stmt.where(model.name.ilike(f"%{params.q}%"))
+        if search_field and params.q:
+            stmt = stmt.where(getattr(model, search_field).ilike(f"%{params.q}%"))
         for field in filters:
             value = getattr(params, field)
             if value is not None:
                 stmt = stmt.where(getattr(model, field) == value)
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-        rows = db.scalars(stmt.order_by(model.name).limit(params.limit).offset(params.offset)).all()
+        stmt = stmt.order_by(*(getattr(model, f) for f in order_by))
+        rows = db.scalars(stmt.limit(params.limit).offset(params.offset)).all()
         return Page(
             items=[read_schema.model_validate(r) for r in rows],
             total=total,
@@ -89,28 +125,23 @@ def build_crud_router(
 
     @router.post("", response_model=read_schema, status_code=status.HTTP_201_CREATED)
     def create_item(payload: create_schema, db: DbSession):  # type: ignore[valid-type]
-        obj = model(**payload.model_dump())
-        db.add(obj)
-        commit(db)
-        db.refresh(obj)
-        return obj
+        obj = model()
+        apply_data(db, obj, payload.model_dump())
+        return save(db, obj)
 
     @router.get("/{item_id}", response_model=read_schema)
     def get_item(item_id: int, db: DbSession):
-        return get_or_404(db, item_id)
+        return get_item_or_404(db, item_id)
 
     @router.patch("/{item_id}", response_model=read_schema)
     def update_item(item_id: int, payload: update_schema, db: DbSession):  # type: ignore[valid-type]
-        obj = get_or_404(db, item_id)
-        for key, value in payload.model_dump(exclude_unset=True).items():
-            setattr(obj, key, value)
-        commit(db)
-        db.refresh(obj)
-        return obj
+        obj = get_item_or_404(db, item_id)
+        apply_data(db, obj, payload.model_dump(exclude_unset=True))
+        return save(db, obj)
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_item(item_id: int, db: DbSession):
-        db.delete(get_or_404(db, item_id))
+        db.delete(get_item_or_404(db, item_id))
         commit(db, deleting=True)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 

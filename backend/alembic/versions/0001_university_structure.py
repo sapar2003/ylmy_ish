@@ -101,3 +101,5 @@ def downgrade() -> None:
     op.drop_table('departments')
     op.drop_table('shifts')
     op.drop_table('faculties')
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS study_level")
