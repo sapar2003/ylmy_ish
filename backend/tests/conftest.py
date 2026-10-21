@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
@@ -9,7 +11,9 @@ from app.main import app
 
 @pytest.fixture
 def client():
-    engine = db_session.make_engine("sqlite://")
+    # Adaty: in-memory SQLite. PostgreSQL bilen barlamak üçin TEST_DATABASE_URL beriň.
+    engine = db_session.make_engine(os.environ.get("TEST_DATABASE_URL", "sqlite://"))
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     TestSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
@@ -21,3 +25,4 @@ def client():
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    engine.dispose()

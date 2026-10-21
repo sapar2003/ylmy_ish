@@ -5,6 +5,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rasp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/rasp
     defaults:
       run:
         working-directory: backend
@@ -14,4 +25,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - name: Tests (SQLite)
+        run: pytest -q
+      - name: Migrations (PostgreSQL)
+        run: alembic upgrade head && alembic check && alembic downgrade base
+      - name: Tests (PostgreSQL)
+        run: TEST_DATABASE_URL=$DATABASE_URL pytest -q
