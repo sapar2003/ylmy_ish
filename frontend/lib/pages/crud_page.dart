@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../resources.dart';
+import '../theme.dart';
 import 'dialogs.dart';
 
 /// Islendik sanaw üçin umumy sahypa: tablisa, gözleg, goşmak, üýtgetmek, aýyrmak.
@@ -171,14 +172,17 @@ class _CrudPageState extends State<CrudPage> {
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text(spec.title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(width: 12),
-            if (!_loading) Chip(label: Text('${_items.length}')),
+            PageTitle(
+              title: spec.title,
+              icon: resourceIcons[spec.endpoint] ?? Icons.list,
+              color: sectionColor(spec.endpoint),
+              count: _loading ? null : _items.length,
+            ),
             const Spacer(),
             SizedBox(
               width: 240,
@@ -186,8 +190,6 @@ class _CrudPageState extends State<CrudPage> {
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
                   hintText: 'Gözle',
-                  isDense: true,
-                  border: OutlineInputBorder(),
                 ),
                 onChanged: (v) => setState(() => _query = v),
               ),
@@ -230,7 +232,7 @@ class _CrudPageState extends State<CrudPage> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
-            headingRowColor: WidgetStatePropertyAll(Theme.of(context).colorScheme.surfaceContainerHighest),
+            headingRowColor: WidgetStatePropertyAll(sectionColor(spec.endpoint).withValues(alpha: 0.14)),
             columns: [
               for (final f in columns) DataColumn(label: Text(f.label)),
               if (spec.facultyFilter == FacultyVia.department) const DataColumn(label: Text('Fakultet')),

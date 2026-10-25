@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../faculties.dart';
 import '../resources.dart';
+import '../theme.dart';
 import 'dialogs.dart';
 
 enum ViewBy { group, teacher, room }
@@ -225,10 +226,10 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Raspisaniýe', style: Theme.of(context).textTheme.headlineSmall),
+          const PageTitle(title: 'Raspisaniýe', icon: Icons.calendar_view_week, color: AppColors.schedule),
           const SizedBox(width: 24),
           if (_timetables.isNotEmpty)
             DropdownButton<int>(
@@ -430,15 +431,17 @@ class _TimetablePageState extends State<TimetablePage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
-          border: TableBorder.all(color: Theme.of(context).dividerColor),
+          border: TableBorder.all(color: AppColors.primary.withValues(alpha: 0.12)),
           defaultColumnWidth: const FixedColumnWidth(190),
           columnWidths: const {0: FixedColumnWidth(90)},
           defaultVerticalAlignment: TableCellVerticalAlignment.top,
           children: [
             TableRow(
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.sidebarTop, AppColors.primary]),
+              ),
               children: [
-                const Padding(padding: EdgeInsets.all(8), child: Text('Wagt')),
+                const Padding(padding: EdgeInsets.all(8), child: Text('Wagt', style: gridHeadStyle)),
                 for (final d in days)
                   Padding(
                     padding: const EdgeInsets.all(8),
@@ -446,16 +449,17 @@ class _TimetablePageState extends State<TimetablePage> {
                       _weekStart == null
                           ? weekdays[d - 1]
                           : '${weekdays[d - 1]}, ${_ddmm(_weekStart!.add(Duration(days: d - 1)))}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: gridHeadStyle,
                     ),
                   ),
               ],
             ),
             for (final t in times)
-              TableRow(children: [
+              TableRow(decoration: const BoxDecoration(color: Colors.white), children: [
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text('${t.substring(0, 5)}\n${t.split('|')[1].substring(0, 5)}'),
+                  child: Text('${t.substring(0, 5)}\n${t.split('|')[1].substring(0, 5)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.schedule)),
                 ),
                 for (final d in days) _cell(d, t),
               ]),
@@ -475,12 +479,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Widget _lessonCard(Map<String, dynamic> e) {
     final type = e['lesson_type'] as String;
-    final color = switch (type) {
-      'lecture' => Colors.indigo,
-      'lab' => Colors.teal,
-      'seminar' => Colors.orange,
-      _ => Colors.blueGrey,
-    };
+    final color = AppColors.lesson(type);
     final groups = (e['stream'] != null ? e['stream']['name'] : (e['groups'] as List).map((g) => g['name']).join(', '));
     final sub = e['subgroup'] != null ? ' · ${e['subgroup']['name']}-nji kiçi topar' : '';
     final lines = [
@@ -491,17 +490,13 @@ class _TimetablePageState extends State<TimetablePage> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(3),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        border: Border(left: BorderSide(color: color, width: 3)),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
+      decoration: lessonDecoration(color),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${e['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         Text(
           '${lessonTypes[type] ?? type}${e['week'] != null ? ' · iki hepdede bir (${e['week']}-nji hepde)' : ''}',
-          style: TextStyle(fontSize: 11, color: color),
+          style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
         ),
         for (final l in lines) Text(l, style: const TextStyle(fontSize: 12)),
       ]),
