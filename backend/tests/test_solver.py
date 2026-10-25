@@ -85,6 +85,21 @@ def test_room_type_and_capacity():
     assert {p.room_id for p in k["lab"]} <= {1, 2}
 
 
+def test_rooms_of_other_faculty_not_used():
+    # 1-nji otag 1-nji fakultetiňki, 2-nji umumy, 3-nji 2-nji fakultetiňki.
+    rooms = [Room(1, 30, 1, faculty_id=1), Room(2, 30, 1), Room(3, 30, 1, faculty_id=2)]
+    lessons = [
+        Lesson(key=f"f2-{g}", curriculum_item_id=0, assignment_id=0, teacher_id=g, group_ids=(g,),
+               subgroup_id=None, per_week=5, size=20, room_type_id=None, allowed_slots=ALL,
+               faculty_ids=frozenset({2}))
+        for g in (1, 2, 3)
+    ]
+    r = solve(base_input(lessons, rooms=rooms))
+    assert r.ok, r.issues
+    assert {p.room_id for p in r.placements} <= {2, 3}
+    assert all(p.room_id is not None for p in r.placements)
+
+
 def test_precheck_reports_impossible_load():
     t = {1: Teacher(1, "A", max_per_week=3)}
     r = solve(base_input([lesson("x", 1, [1], 5)], teachers=t))

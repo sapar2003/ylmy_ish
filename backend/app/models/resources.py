@@ -77,6 +77,9 @@ class RoomType(IdMixin, TimestampMixin, Base):
 
 
 class Room(IdMixin, TimestampMixin, Base):
+    """Otag bir fakultete degişli bolup biler: onda diňe şol fakultetiň toparlary okaýar.
+    Fakulteti görkezilmedik otag umumy, islendik topar ulanyp bilýär."""
+
     __tablename__ = "rooms"
     __table_args__ = (
         UniqueConstraint("building_id", "name"),
@@ -87,3 +90,4 @@ class Room(IdMixin, TimestampMixin, Base):
     capacity: Mapped[int]
     building_id: Mapped[int] = mapped_column(ForeignKey("buildings.id", ondelete="RESTRICT"), index=True)
     room_type_id: Mapped[int] = mapped_column(ForeignKey("room_types.id", ondelete="RESTRICT"), index=True)
+    faculty_id: Mapped[int | None] = mapped_column(ForeignKey("faculties.id", ondelete="RESTRICT"), index=True)

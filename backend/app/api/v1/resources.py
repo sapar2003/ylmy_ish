@@ -81,5 +81,5 @@ router.include_router(build_crud_router(
 ))
 router.include_router(build_crud_router(
     model=m.Room, create_schema=s.RoomCreate, update_schema=s.RoomUpdate,
-    read_schema=s.RoomRead, prefix="/rooms", tag="Otaglar", filters=("building_id", "room_type_id"),
+    read_schema=s.RoomRead, prefix="/rooms", tag="Otaglar", filters=("building_id", "room_type_id", "faculty_id"),
 ))

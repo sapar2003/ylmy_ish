@@ -43,6 +43,7 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
           switch (f.type) {
             FieldType.boolean => false,
             FieldType.refList => <int>[],
+            FieldType.weekdays => [1, 2, 3, 4, 5, 6],
             _ => null,
           },
   };
@@ -111,11 +112,15 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
       case FieldType.text:
       case FieldType.integer:
       case FieldType.time:
+      case FieldType.date:
         final isInt = f.type == FieldType.integer;
         final isTime = f.type == FieldType.time;
+        final isDate = f.type == FieldType.date;
         return TextFormField(
           initialValue: value == null ? '' : (isTime ? '$value'.substring(0, 5) : '$value'),
-          decoration: _decoration(f).copyWith(hintText: isTime ? 'SS:MM, meselem 08:30' : null),
+          decoration: _decoration(f).copyWith(
+            hintText: isTime ? 'SS:MM, meselem 08:30' : (isDate ? 'ÝÝÝÝ-AA-GG, meselem 2026-11-02' : null),
+          ),
           keyboardType: isInt ? TextInputType.number : TextInputType.text,
           validator: (v) {
             final missing = _requiredCheck(f, v);
@@ -123,6 +128,9 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
             if (v == null || v.isEmpty) return null;
             if (isInt && int.tryParse(v) == null) return 'San giriziň';
             if (isTime && !RegExp(r'^\d{1,2}:\d{2}$').hasMatch(v)) return 'SS:MM görnüşinde giriziň';
+            if (isDate && (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v) || DateTime.tryParse(v) == null)) {
+              return 'ÝÝÝÝ-AA-GG görnüşinde giriziň';
+            }
             return null;
           },
           onSaved: (v) {
@@ -165,6 +173,22 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
                 onSelected: (on) => setState(() {
                   on ? selected.add(o['id'] as int) : selected.remove(o['id']);
                   _values[f.key] = selected.toList();
+                }),
+              ),
+          ]),
+        );
+      case FieldType.weekdays:
+        final selected = (value as List).cast<int>().toSet();
+        return InputDecorator(
+          decoration: _decoration(f),
+          child: Wrap(spacing: 6, runSpacing: 6, children: [
+            for (var d = 1; d <= 7; d++)
+              FilterChip(
+                label: Text(weekdays[d - 1]),
+                selected: selected.contains(d),
+                onSelected: (on) => setState(() {
+                  on ? selected.add(d) : selected.remove(d);
+                  _values[f.key] = selected.toList()..sort();
                 }),
               ),
           ]),

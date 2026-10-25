@@ -14,6 +14,23 @@ log = logging.getLogger(__name__)
 LESSON_TYPE_NAMES = {"lecture": "leksiýa", "practice": "amaly", "lab": "tejribe", "seminar": "seminar"}
 
 
+def group_faculties(db: Session) -> dict[int, int]:
+    """topar id -> fakultet id (hünär -> kafedra -> fakultet arkaly)."""
+    rows = db.execute(
+        select(m.Group.id, m.Department.faculty_id)
+        .join(m.Specialty, m.Specialty.id == m.Group.specialty_id)
+        .join(m.Department, m.Department.id == m.Specialty.department_id)
+    )
+    return {group_id: faculty_id for group_id, faculty_id in rows}
+
+
+def solver_rooms(db: Session) -> list[sv.Room]:
+    return [
+        sv.Room(id=r.id, capacity=r.capacity, room_type_id=r.room_type_id, faculty_id=r.faculty_id)
+        for r in db.scalars(select(m.Room))
+    ]
+
+
 def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput, list[str]]:
     """Solwer girişini we solwere girip bilmeýän ýazgylar barada duýduryşlary gaýtarýar."""
     warnings: list[str] = []
@@ -24,6 +41,7 @@ def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput,
     all_slots = frozenset(s.id for s in slots)
 
     groups = {g.id: g for g in db.scalars(select(m.Group))}
+    faculty_of = group_faculties(db)
     subgroups = {s.id: s for s in db.scalars(select(m.Subgroup))}
     subgroups_of: dict[int, list[int]] = defaultdict(list)
     for s in subgroups.values():
@@ -80,10 +98,10 @@ def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput,
                 key=str(a.id), curriculum_item_id=item.id, assignment_id=a.id, teacher_id=a.teacher_id,
                 group_ids=tuple(group_ids), subgroup_id=a.subgroup_id, per_week=item.lessons_per_week,
                 size=max(size, 1), room_type_id=item.room_type_id, allowed_slots=group_slots(group_ids),
-                label=label,
+                label=label, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             ))
 
-    rooms = [sv.Room(id=r.id, capacity=r.capacity, room_type_id=r.room_type_id) for r in db.scalars(select(m.Room))]
+    rooms = solver_rooms(db)
     if not slots:
         warnings.append("Wagt slotlary ýok: ilki smenalar üçin slotlary dörediň.")
     if not rooms:

@@ -121,6 +121,7 @@ class RoomCreate(BaseModel):
     capacity: int = Field(gt=0)
     building_id: int
     room_type_id: int
+    faculty_id: int | None = Field(default=None, description="Görkezilmese, otag ähli fakultetler üçin umumy")
 
 
 class RoomUpdate(BaseModel):
@@ -128,6 +129,7 @@ class RoomUpdate(BaseModel):
     capacity: int | None = Field(default=None, gt=0)
     building_id: int | None = None
     room_type_id: int | None = None
+    faculty_id: int | None = None
 
 
 class RoomRead(ReadBase, RoomCreate):

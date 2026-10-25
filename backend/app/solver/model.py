@@ -14,6 +14,7 @@ class Room:
     id: int
     capacity: int
     room_type_id: int
+    faculty_id: int | None = None  # None: umumy otag
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class Lesson:
     room_type_id: int | None
     allowed_slots: frozenset[int]  # toparyň smenasy boýunça
     label: str = ""  # adam üçin: "PO-101 · Matematika (amaly) · A. Annaýew"
+    faculty_ids: frozenset[int] = frozenset()  # toparlaryň fakultetleri: diňe olaryň we umumy otaglar
 
 
 @dataclass

@@ -12,7 +12,7 @@ from collections import defaultdict
 from ortools.sat.python import cp_model
 
 from app.solver.model import Placement, SolverInput, SolverResult
-from app.solver.precheck import eligible_rooms, precheck, teacher_slots
+from app.solver.precheck import eligible_rooms, precheck, room_allowed, teacher_slots
 
 # Ýumşak çäklendirmeleriň agramy (jerime ballary).
 W_SAME_DAY = 30  # bir ders bir günde iki gezek
@@ -26,6 +26,27 @@ STATUS_NAMES = {
     cp_model.MODEL_INVALID: "model_invalid",
     cp_model.UNKNOWN: "unknown",
 }
+
+
+def add_room_limits(model: cp_model.CpModel, rooms: list, here: list) -> None:
+    """Bir wagtda geçýän sapaklar/synaglar üçin otaglaryň sanyny hasaba alýar.
+
+    `here`: [(sapak ýa-da synag, bool var)]. Her ulanyp bolýan otaglar toplumy A we sygym çägi c üçin:
+    diňe A-nyň içindäki otaglara sygýan, c-den uly sapaklaryň sany A-daky c-den uly otaglardan köp däl.
+    Bu takyk bölüşik däl (ony ikinji tapgyr edýär), ýöne köplenç ýeterlik.
+    """
+    model.add(sum(v for _, v in here) <= len(rooms))
+    allowed = {}  # otag talaby (görnüşi, fakultetleri) -> ulanyp bolýan otaglar
+    for item, _ in here:
+        need = (item.room_type_id, item.faculty_ids)
+        if need not in allowed:
+            allowed[need] = frozenset(r.id for r in rooms if room_allowed(r, item))
+    capacity = {r.id: r.capacity for r in rooms}
+    for room_set in set(allowed.values()) | {frozenset(capacity)}:
+        inside = [(item, v) for item, v in here if allowed[item.room_type_id, item.faculty_ids] <= room_set]
+        for c in sorted({item.size for item, _ in inside}):
+            big = [v for item, v in inside if item.size >= c]
+            model.add(sum(big) <= sum(1 for rid in room_set if capacity[rid] >= c))
 
 
 def _solve_times(inp: SolverInput, time_limit: float):
@@ -90,21 +111,8 @@ def _solve_times(inp: SolverInput, time_limit: float):
         if limit is not None:
             model.add(sum(vars_) <= limit)
 
-    # Otaglar: her slotda, her otag görnüşi we sygym çägi üçin uly sapaklar laýyk otaglardan köp bolmaly däl.
-    model_rooms = inp.rooms
-    for sid, here in by_slot.items():
-        model.add(sum(v for _, v in here) <= len(model_rooms))
-        by_type = defaultdict(list)
-        for i, v in here:
-            by_type[inp.lessons[i].room_type_id].append((i, v))
-        for room_type, items in by_type.items():
-            for c in sorted({inp.lessons[i].size for i, _ in items}):
-                big = [v for i, v in items if inp.lessons[i].size >= c]
-                fit = sum(
-                    1 for r in model_rooms
-                    if r.capacity >= c and (room_type is None or r.room_type_id == room_type)
-                )
-                model.add(sum(big) <= fit)
+    for here in by_slot.values():
+        add_room_limits(model, inp.rooms, [(inp.lessons[i], v) for i, v in here])
 
     model.minimize(sum(penalties))
     solver = cp_model.CpSolver()
@@ -114,12 +122,15 @@ def _solve_times(inp: SolverInput, time_limit: float):
     return solver, status, x
 
 
-def _assign_rooms(inp: SolverInput, lesson_idxs: list[int]) -> dict[int, int] | None:
-    """Bir slotdaky sapaklara otag bölýär; boş galýan orunlary azaldýar."""
+def assign_rooms(rooms: list, items: dict[int, object]) -> dict[int, int] | None:
+    """Bir wagtda geçýän sapaklara/synaglara otag bölýär; boş galýan orunlary azaldýar.
+
+    `items`: {indeks: sapak ýa-da synag}; netije {indeks: otag id}.
+    """
     model = cp_model.CpModel()
     y = {}
-    for i in lesson_idxs:
-        options = eligible_rooms(inp, inp.lessons[i])
+    for i, item in items.items():
+        options = eligible_rooms(rooms, item)
         if not options:
             return None
         for r in options:
@@ -130,8 +141,8 @@ def _assign_rooms(inp: SolverInput, lesson_idxs: list[int]) -> dict[int, int] | 
         by_room[rid].append(v)
     for vars_ in by_room.values():
         model.add_at_most_one(vars_)
-    cap = {r.id: r.capacity for r in inp.rooms}
-    model.minimize(sum((cap[rid] - inp.lessons[i].size) * v for (i, rid), v in y.items()))
+    cap = {r.id: r.capacity for r in rooms}
+    model.minimize(sum((cap[rid] - items[i].size) * v for (i, rid), v in y.items()))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 10
     if solver.solve(model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -163,7 +174,7 @@ def solve(inp: SolverInput) -> SolverResult:
 
     placements, issues = [], []
     for sid, idxs in chosen.items():
-        rooms = _assign_rooms(inp, idxs)
+        rooms = assign_rooms(inp.rooms, {i: inp.lessons[i] for i in idxs})
         if rooms is None:
             issues.append(f"Slot id={sid}: otaglary bölüp bolmady, sapaklar otagsyz goýuldy.")
             rooms = {}
