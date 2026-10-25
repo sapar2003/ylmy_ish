@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
 import 'dialogs.dart';
 
@@ -24,6 +25,7 @@ class _TimetablePageState extends State<TimetablePage> {
   ViewBy _viewBy = ViewBy.group;
   int? _targetId;
   List<Map<String, dynamic>> _entries = [];
+  Map<int, String> _teacherFaculty = {};
   Timer? _poll;
   bool _loading = true;
 
@@ -48,6 +50,7 @@ class _TimetablePageState extends State<TimetablePage> {
         Api.instance.list('rooms'),
         Api.instance.list('time-slots'),
       ]);
+      final faculties = await loadTeacherFaculties(r[2] as List<Map<String, dynamic>>);
       if (!mounted) return;
       setState(() {
         _timetables = (r[0] as List).cast<Map<String, dynamic>>();
@@ -55,6 +58,7 @@ class _TimetablePageState extends State<TimetablePage> {
         _targets[ViewBy.teacher] = r[2] as List<Map<String, dynamic>>;
         _targets[ViewBy.room] = r[3] as List<Map<String, dynamic>>;
         _slots = r[4] as List<Map<String, dynamic>>;
+        _teacherFaculty = faculties;
         _current ??= _timetables.where((t) => t['status'] == 'done').firstOrNull ?? _timetables.firstOrNull;
         _targetId ??= _targets[_viewBy]!.firstOrNull?['id'] as int?;
         _loading = false;
@@ -204,7 +208,10 @@ class _TimetablePageState extends State<TimetablePage> {
             hint: const Text('Saýlaň'),
             items: [
               for (final t in _targets[_viewBy]!)
-                DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}')),
+                DropdownMenuItem(
+                  value: t['id'] as int,
+                  child: Text(_viewBy == ViewBy.teacher ? withFaculty(t, _teacherFaculty) : '${t['name']}'),
+                ),
             ],
             onChanged: (id) {
               setState(() => _targetId = id);
@@ -324,7 +331,7 @@ class _TimetablePageState extends State<TimetablePage> {
     final groups = (e['stream'] != null ? e['stream']['name'] : (e['groups'] as List).map((g) => g['name']).join(', '));
     final sub = e['subgroup'] != null ? ' · ${e['subgroup']['name']}-nji kiçi topar' : '';
     final lines = [
-      if (_viewBy != ViewBy.teacher) '${e['teacher']['name']}',
+      if (_viewBy != ViewBy.teacher) withFaculty(e['teacher'], _teacherFaculty),
       if (_viewBy != ViewBy.group) '$groups$sub' else if (sub.isNotEmpty) sub.substring(3),
       if (_viewBy != ViewBy.room) 'Otag ${e['room']?['name'] ?? '—'}',
     ];

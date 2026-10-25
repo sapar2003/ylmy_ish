@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
 import 'dialogs.dart';
 import 'timetable_page.dart' show ViewBy;
@@ -25,6 +26,7 @@ class _ExamPageState extends State<ExamPage> {
   ViewBy _viewBy = ViewBy.group;
   int? _targetId;
   List<Map<String, dynamic>> _entries = [];
+  Map<int, String> _teacherFaculty = {};
   Timer? _poll;
   bool _loading = true;
 
@@ -48,8 +50,10 @@ class _ExamPageState extends State<ExamPage> {
         Api.instance.list('teachers'),
         Api.instance.list('rooms'),
       ]);
+      final faculties = await loadTeacherFaculties(r[2]);
       if (!mounted) return;
       setState(() {
+        _teacherFaculty = faculties;
         _sessions = r[0];
         _targets[ViewBy.group] = r[1];
         _targets[ViewBy.teacher] = r[2];
@@ -249,7 +253,10 @@ class _ExamPageState extends State<ExamPage> {
             hint: const Text('Saýlaň'),
             items: [
               for (final t in _targets[_viewBy]!)
-                DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}')),
+                DropdownMenuItem(
+                  value: t['id'] as int,
+                  child: Text(_viewBy == ViewBy.teacher ? withFaculty(t, _teacherFaculty) : '${t['name']}'),
+                ),
             ],
             onChanged: (id) {
               setState(() => _targetId = id);
@@ -369,7 +376,10 @@ class _ExamPageState extends State<ExamPage> {
   Widget _examCard(Map<String, dynamic> e) {
     const color = Colors.deepPurple;
     final groups = e['stream'] != null ? e['stream']['name'] : (e['groups'] as List).map((g) => g['name']).join(', ');
-    final teachers = [e['examiner']['name'], if (e['assistant'] != null) e['assistant']['name']].join(', ');
+    final teachers = [
+      withFaculty(e['examiner'], _teacherFaculty),
+      if (e['assistant'] != null) withFaculty(e['assistant'], _teacherFaculty),
+    ].join(', ');
     final lines = [
       if (_viewBy != ViewBy.group) '$groups',
       teachers, // mugallym boýunça görlende hem: uly we kiçi mugallym bilelikde görünsin
