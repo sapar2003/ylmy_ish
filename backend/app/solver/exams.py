@@ -1,6 +1,6 @@
 """Synag raspisaniýesi (OR-Tools CP-SAT). Maglumat bazasyna bagly däl.
 
-Gaty şertler: her synag bir gezek; uly we kiçi mugallym bir wagtda diňe bir synagda; topar günde
+Gaty şertler: her synag bir gezek; uly we kiçi mugallym we topar bir wagtda diňe bir synagda; topar günde
 `max_per_day`-dan köp synag tabşyrmaýar we synaglarynyň arasynda `rest_days` boş gün bolýar;
 her wagtda ýeterlik laýyk otag bar.
 Ýumşak şertler: toparyň synaglary yzly-yzyna günlere düşmesin, mugallymyň günde bir synagy bolsun.
@@ -110,6 +110,7 @@ def solve_exams(inp: ExamInput) -> ExamResult:
     by_slot = defaultdict(list)
     by_teacher_slot = defaultdict(list)
     by_teacher_day = defaultdict(list)
+    by_group_slot = defaultdict(list)
     by_group_day = defaultdict(list)
     for i, e in enumerate(inp.exams):
         vars_ = []
@@ -122,11 +123,12 @@ def solve_exams(inp: ExamInput) -> ExamResult:
                 by_teacher_slot[t, s.id].append(v)
                 by_teacher_day[t, s.day].append(v)
             for g in e.group_ids:
+                by_group_slot[g, s.id].append(v)
                 by_group_day[g, s.day].append(v)
             penalties.append(W_LATE * s.number * v)
         model.add_exactly_one(vars_)
 
-    for vars_ in by_teacher_slot.values():
+    for vars_ in (*by_teacher_slot.values(), *by_group_slot.values()):
         model.add_at_most_one(vars_)
     for vars_ in by_teacher_day.values():
         if len(vars_) > 1:
