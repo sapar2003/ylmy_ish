@@ -55,12 +55,15 @@ class CurriculumItem(IdMixin, TimestampMixin, Base):
     __tablename__ = "curriculum_items"
     __table_args__ = (
         CheckConstraint("(group_id IS NULL) <> (stream_id IS NULL)", name="group_xor_stream"),
-        CheckConstraint("lessons_per_week > 0", name="lessons_per_week_positive"),
+        CheckConstraint(
+            "lessons_per_week >= 0 AND biweekly >= 0 AND lessons_per_week + biweekly > 0", name="lessons_positive"
+        ),
     )
 
     subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id", ondelete="RESTRICT"), index=True)
     lesson_type: Mapped[LessonType] = mapped_column(Enum(LessonType, name="lesson_type"))
-    lessons_per_week: Mapped[int]
+    lessons_per_week: Mapped[int]  # her hepde
+    biweekly: Mapped[int] = mapped_column(default=0, server_default="0")  # iki hepdede bir (1-nji ýa 2-nji hepde)
     group_id: Mapped[int | None] = mapped_column(ForeignKey("groups.id", ondelete="RESTRICT"), index=True)
     stream_id: Mapped[int | None] = mapped_column(ForeignKey("streams.id", ondelete="RESTRICT"), index=True)
     split: Mapped[bool] = mapped_column(Boolean, default=False)  # kiçi toparlara bölünýärmi

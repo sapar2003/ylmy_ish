@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
+import '../theme.dart';
 import 'dialogs.dart';
 import 'timetable_page.dart' show ViewBy;
 
@@ -25,6 +27,7 @@ class _ExamPageState extends State<ExamPage> {
   ViewBy _viewBy = ViewBy.group;
   int? _targetId;
   List<Map<String, dynamic>> _entries = [];
+  Map<int, String> _teacherFaculty = {};
   Timer? _poll;
   bool _loading = true;
 
@@ -48,8 +51,10 @@ class _ExamPageState extends State<ExamPage> {
         Api.instance.list('teachers'),
         Api.instance.list('rooms'),
       ]);
+      final faculties = await loadTeacherFaculties(r[2]);
       if (!mounted) return;
       setState(() {
+        _teacherFaculty = faculties;
         _sessions = r[0];
         _targets[ViewBy.group] = r[1];
         _targets[ViewBy.teacher] = r[2];
@@ -180,10 +185,10 @@ class _ExamPageState extends State<ExamPage> {
       );
     }
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Synag raspisaniýesi', style: Theme.of(context).textTheme.headlineSmall),
+          const PageTitle(title: 'Synag raspisaniýesi', icon: Icons.fact_check, color: AppColors.exams),
           const SizedBox(width: 24),
           DropdownButton<int>(
             value: _session?['id'] as int?,
@@ -249,7 +254,10 @@ class _ExamPageState extends State<ExamPage> {
             hint: const Text('Saýlaň'),
             items: [
               for (final t in _targets[_viewBy]!)
-                DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}')),
+                DropdownMenuItem(
+                  value: t['id'] as int,
+                  child: Text(_viewBy == ViewBy.teacher ? withFaculty(t, _teacherFaculty) : '${t['name']}'),
+                ),
             ],
             onChanged: (id) {
               setState(() => _targetId = id);
@@ -325,30 +333,33 @@ class _ExamPageState extends State<ExamPage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
-          border: TableBorder.all(color: Theme.of(context).dividerColor),
+          border: TableBorder.all(color: AppColors.primary.withValues(alpha: 0.12)),
           defaultColumnWidth: const FixedColumnWidth(220),
           columnWidths: const {0: FixedColumnWidth(120)},
           defaultVerticalAlignment: TableCellVerticalAlignment.top,
           children: [
             TableRow(
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.sidebarTop, AppColors.primary]),
+              ),
               children: [
-                const Padding(padding: EdgeInsets.all(8), child: Text('Sene')),
+                const Padding(padding: EdgeInsets.all(8), child: Text('Sene', style: gridHeadStyle)),
                 for (final p in _periods)
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
                       '${p['number']}. ${'${p['starts_at']}'.substring(0, 5)}-${'${p['ends_at']}'.substring(0, 5)}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: gridHeadStyle,
                     ),
                   ),
               ],
             ),
             for (final d in days)
-              TableRow(children: [
+              TableRow(decoration: const BoxDecoration(color: Colors.white), children: [
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text('${_iso(d).substring(8)}.${_iso(d).substring(5, 7)}\n${weekdays[d.weekday - 1]}'),
+                  child: Text('${_iso(d).substring(8)}.${_iso(d).substring(5, 7)}\n${weekdays[d.weekday - 1]}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.exams)),
                 ),
                 for (final p in _periods) _cell(_iso(d), p['number'] as int),
               ]),
@@ -367,9 +378,12 @@ class _ExamPageState extends State<ExamPage> {
   }
 
   Widget _examCard(Map<String, dynamic> e) {
-    const color = Colors.deepPurple;
+    const color = AppColors.exams;
     final groups = e['stream'] != null ? e['stream']['name'] : (e['groups'] as List).map((g) => g['name']).join(', ');
-    final teachers = [e['examiner']['name'], if (e['assistant'] != null) e['assistant']['name']].join(', ');
+    final teachers = [
+      withFaculty(e['examiner'], _teacherFaculty),
+      if (e['assistant'] != null) withFaculty(e['assistant'], _teacherFaculty),
+    ].join(', ');
     final lines = [
       if (_viewBy != ViewBy.group) '$groups',
       teachers, // mugallym boýunça görlende hem: uly we kiçi mugallym bilelikde görünsin
@@ -378,12 +392,8 @@ class _ExamPageState extends State<ExamPage> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(3),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        border: const Border(left: BorderSide(color: color, width: 3)),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
+      decoration: lessonDecoration(color),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${e['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         for (final l in lines) Text(l, style: const TextStyle(fontSize: 12)),

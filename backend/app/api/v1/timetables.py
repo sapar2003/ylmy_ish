@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -15,18 +16,27 @@ from app.services.generation import build_input, start_generation
 router = APIRouter(prefix="/timetables", tags=["Raspisaniýe"])
 
 
+def week_of(tt: m.Timetable, day: date) -> int | None:
+    """Senäniň 1-nji ýa 2-nji hepdedigi: ýarymýylyň ilkinji hepdesi 1-nji, soňky hepde 2-nji we ş.m.
+    Bir hepdelik raspisaniýede ýa-da başlanýan senesi bolmasa None (ähli sapaklar)."""
+    if tt.weeks != 2 or tt.starts_on is None:
+        return None
+    first_monday = tt.starts_on - timedelta(days=tt.starts_on.weekday())
+    return (day - first_monday).days // 7 % 2 + 1
+
+
 def _read(db: Session, tt: m.Timetable) -> s.TimetableRead:
     count = db.scalar(select(func.count()).where(m.TimetableEntry.timetable_id == tt.id))
     return s.TimetableRead.model_validate(tt).model_copy(update={"entry_count": count})
 
 
 @router.get("/precheck", response_model=s.PrecheckRead)
-def run_precheck(db: DbSession):
+def run_precheck(db: DbSession, weeks: int = Query(1, ge=1, le=2, description="2: iki hepdelik raspisaniýe")):
     """Raspisaniýe düzmezden öň maglumatlary barlaýar (solweri işletmeýär)."""
-    inp, warnings = build_input(db, 0)
+    inp, warnings = build_input(db, 0, weeks)
     return s.PrecheckRead(
         lessons=len(inp.lessons),
-        lessons_per_week=sum(lesson.per_week for lesson in inp.lessons),
+        lessons_per_week=sum(lesson.per_week + lesson.biweekly for lesson in inp.lessons),
         issues=warnings + sv.precheck(inp),
     )
 
@@ -38,7 +48,7 @@ def create_timetable(
     factory: Annotated[sessionmaker, Depends(get_session_factory)],
 ):
     """Täze raspisaniýe döredýär we fonda düzüp başlaýar. Ýagdaýyny `GET /timetables/{id}` bilen yzarlaň."""
-    tt = m.Timetable(name=payload.name, time_limit_seconds=payload.time_limit_seconds, issues=[])
+    tt = m.Timetable(**payload.model_dump(), issues=[])
     db.add(tt)
     db.commit()
     start_generation(factory, tt.id, background=settings.generation_in_background)
@@ -70,8 +80,12 @@ def list_entries(
     group_id: int | None = Query(None, description="Toparyň ähli sapaklary (potok we kiçi topar sapaklary bilen)"),
     teacher_id: int | None = None,
     room_id: int | None = None,
+    week: int | None = Query(None, ge=1, le=2, description="Diňe şu hepdäniň sapaklary (her hepdekiler bilen)"),
+    on: date | None = Query(None, description="Bu senäniň hepdesi: 1-nji ýa 2-nji hepdäni özi kesgitleýär"),
 ):
-    get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe")
+    tt = get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe")
+    if on is not None:
+        week = week_of(tt, on)
     rows = db.execute(
         select(m.TimetableEntry, m.TeachingAssignment, m.CurriculumItem, m.TimeSlot)
         .join(m.TeachingAssignment, m.TeachingAssignment.id == m.TimetableEntry.assignment_id)
@@ -95,6 +109,8 @@ def list_entries(
             continue
         if room_id is not None and entry.room_id != room_id:
             continue
+        if week is not None and entry.week not in (None, week):
+            continue
         room = rooms.get(entry.room_id) if entry.room_id else None
         sub = subgroups.get(a.subgroup_id) if a.subgroup_id else None
         out.append(s.EntryRead(
@@ -107,5 +123,6 @@ def list_entries(
             groups=[s.Ref(id=g, name=groups[g].name) for g in group_ids],
             subgroup=s.Ref(id=sub.id, name=sub.name) if sub else None,
             stream=s.Ref(id=stream.id, name=stream.name) if stream else None,
+            week=entry.week,
         ))
     return out

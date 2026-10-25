@@ -49,13 +49,23 @@ def add_room_limits(model: cp_model.CpModel, rooms: list, here: list) -> None:
             model.add(sum(big) <= sum(1 for rid in room_set if capacity[rid] >= c))
 
 
+def weekly_count(inp: SolverInput, lesson) -> int:
+    """Her hepde geçýän sapak sany. Bir hepdelik raspisaniýede iki hepdede birler hem şoňa goşulýar."""
+    return lesson.per_week + (lesson.biweekly if inp.weeks == 1 else 0)
+
+
 def _solve_times(inp: SolverInput, time_limit: float):
+    """Wagt tapgyry. Iki hepdelik raspisaniýede (inp.weeks == 2) her wagt "hepde + slot" jübüti:
+    her hepde geçýän sapak (x) iki hepdäniň şol slotuny hem tutýar, iki hepdede birki (y) diňe bir hepdäňkini.
+    """
     model = cp_model.CpModel()
     slot_by_id = {s.id: s for s in inp.slots}
-    x: dict[tuple[int, int], cp_model.IntVar] = {}  # (sapak indeksi, slot id) -> bool
+    weeks = range(1, inp.weeks + 1)
+    x: dict[tuple[int, int], cp_model.IntVar] = {}  # (sapak, slot) -> her hepde
+    y: dict[tuple[int, int, int], cp_model.IntVar] = {}  # (sapak, hepde, slot) -> diňe şol hepde
     penalties = []
 
-    by_slot = defaultdict(list)  # slot id -> [(sapak indeksi, var)]
+    by_slot = defaultdict(list)  # (hepde, slot) -> [(sapak indeksi, var)]
     by_teacher_slot = defaultdict(list)
     by_teacher_day = defaultdict(list)
     by_group_slot = defaultdict(list)  # toparyň umumy sapaklary
@@ -63,29 +73,48 @@ def _solve_times(inp: SolverInput, time_limit: float):
 
     for i, lesson in enumerate(inp.lessons):
         teacher = inp.teachers[lesson.teacher_id]
-        per_day = defaultdict(list)
+        every_week = weekly_count(inp, lesson)
+        biweekly = lesson.biweekly if inp.weeks == 2 else 0
+        per_day = defaultdict(list)  # (hepde, gün) -> var
+        own_x, own_y = [], defaultdict(list)
         for sid in sorted(teacher_slots(inp, lesson)):
-            v = model.new_bool_var(f"x_{i}_{sid}")
-            x[i, sid] = v
             slot = slot_by_id[sid]
-            by_slot[sid].append((i, v))
-            by_teacher_slot[lesson.teacher_id, sid].append(v)
-            by_teacher_day[lesson.teacher_id, slot.weekday].append(v)
-            per_day[slot.weekday].append(v)
-            if lesson.subgroup_id is None:
-                for g in lesson.group_ids:
-                    by_group_slot[g, sid].append(v)
-            else:
-                by_subgroup_slot[lesson.subgroup_id, sid].append(v)
-            penalties.append(W_LATE * slot.number * v)
-            if sid in teacher.preferred:
-                penalties.append(-W_PREFERRED * v)
-        model.add(sum(v for vs in per_day.values() for v in vs) == lesson.per_week)
+            occupies = []  # (hepde, var)
+            if every_week:
+                v = model.new_bool_var(f"x_{i}_{sid}")
+                x[i, sid] = v
+                own_x.append(v)
+                occupies += [(w, v) for w in weeks]
+                penalties.append(W_LATE * slot.number * v)
+                if sid in teacher.preferred:
+                    penalties.append(-W_PREFERRED * v)
+            for w in weeks if biweekly else ():
+                v = model.new_bool_var(f"y_{i}_{w}_{sid}")
+                y[i, w, sid] = v
+                own_y[w].append(v)
+                occupies.append((w, v))
+                penalties.append(W_LATE * slot.number * v)
+            for w, v in occupies:
+                by_slot[w, sid].append((i, v))
+                by_teacher_slot[lesson.teacher_id, w, sid].append(v)
+                by_teacher_day[lesson.teacher_id, w, slot.weekday].append(v)
+                per_day[w, slot.weekday].append(v)
+                if lesson.subgroup_id is None:
+                    for g in lesson.group_ids:
+                        by_group_slot[g, w, sid].append(v)
+                else:
+                    by_subgroup_slot[lesson.subgroup_id, w, sid].append(v)
+        if every_week:
+            model.add(sum(own_x) == every_week)
+        if biweekly:
+            model.add(sum(v for vs in own_y.values() for v in vs) == biweekly)
+            for vs in own_y.values():  # iki hepdä deň paýlamak
+                model.add(sum(vs) <= (biweekly + 1) // 2)
 
         # Bir dersi bir günde iki gezek goýmazlyk (mümkin bolsa).
-        for day, day_vars in per_day.items():
+        for key, day_vars in per_day.items():
             if len(day_vars) > 1:
-                extra = model.new_int_var(0, len(day_vars), f"same_day_{i}_{day}")
+                extra = model.new_int_var(0, len(day_vars), f"same_day_{i}_{key}")
                 model.add(extra >= sum(day_vars) - 1)
                 penalties.append(W_SAME_DAY * extra)
 
@@ -96,17 +125,17 @@ def _solve_times(inp: SolverInput, time_limit: float):
     # Topar: umumy sapak we her kiçi toparyň sapagy bir wagtda bolup bilmez.
     # Iki kiçi toparyň sapaklary bolsa bir wagtda geçip biler.
     group_of_subgroup = {sg: g for g, subs in inp.subgroups_of.items() for sg in subs}
-    group_slot_keys = set(by_group_slot) | {(group_of_subgroup[sg], sid) for sg, sid in by_subgroup_slot}
-    for g, sid in group_slot_keys:
-        common = by_group_slot.get((g, sid), [])
+    group_slot_keys = set(by_group_slot) | {(group_of_subgroup[sg], w, sid) for sg, w, sid in by_subgroup_slot}
+    for g, w, sid in group_slot_keys:
+        common = by_group_slot.get((g, w, sid), [])
         subs = inp.subgroups_of.get(g, [])
         if not subs:
             model.add_at_most_one(common)
         for sg in subs:
-            model.add_at_most_one(common + by_subgroup_slot.get((sg, sid), []))
+            model.add_at_most_one(common + by_subgroup_slot.get((sg, w, sid), []))
 
     # Mugallymyň günlük çägi.
-    for (tid, _day), vars_ in by_teacher_day.items():
+    for (tid, _w, _day), vars_ in by_teacher_day.items():
         limit = inp.teachers[tid].max_per_day
         if limit is not None:
             model.add(sum(vars_) <= limit)
@@ -119,13 +148,15 @@ def _solve_times(inp: SolverInput, time_limit: float):
     solver.parameters.max_time_in_seconds = max(1.0, time_limit)
     solver.parameters.num_workers = inp.workers
     status = solver.solve(model)
-    return solver, status, x
+    return solver, status, x, y
 
 
-def assign_rooms(rooms: list, items: dict[int, object]) -> dict[int, int] | None:
+def assign_rooms(rooms: list, items: dict, clashes: list[list] | None = None) -> dict | None:
     """Bir wagtda geçýän sapaklara/synaglara otag bölýär; boş galýan orunlary azaldýar.
 
-    `items`: {indeks: sapak ýa-da synag}; netije {indeks: otag id}.
+    `items`: {açar: sapak ýa-da synag}; netije {açar: otag id}.
+    `clashes`: bir otagy paýlaşyp bilmeýän açarlaryň toparlary (adaty: hemmesi bir topar). Iki hepdelik
+    raspisaniýede her hepde aýry topar: her hepde geçýän sapak ikisinde hem bar, şonuň üçin otagy üýtgemeýär.
     """
     model = cp_model.CpModel()
     y = {}
@@ -136,11 +167,14 @@ def assign_rooms(rooms: list, items: dict[int, object]) -> dict[int, int] | None
         for r in options:
             y[i, r.id] = model.new_bool_var(f"y_{i}_{r.id}")
         model.add_exactly_one(y[i, r.id] for r in options)
-    by_room = defaultdict(list)
-    for (i, rid), v in y.items():
-        by_room[rid].append(v)
-    for vars_ in by_room.values():
-        model.add_at_most_one(vars_)
+    for keys in clashes or [list(items)]:
+        by_room = defaultdict(list)
+        for i in keys:
+            for r in rooms:
+                if (i, r.id) in y:
+                    by_room[r.id].append(y[i, r.id])
+        for vars_ in by_room.values():
+            model.add_at_most_one(vars_)
     cap = {r.id: r.capacity for r in rooms}
     model.minimize(sum((cap[rid] - items[i].size) * v for (i, rid), v in y.items()))
     solver = cp_model.CpSolver()
@@ -156,7 +190,7 @@ def solve(inp: SolverInput) -> SolverResult:
     if issues:
         return SolverResult(ok=False, status="precheck_failed", issues=issues, seconds=time.monotonic() - started)
 
-    solver, status, x = _solve_times(inp, inp.time_limit_seconds)
+    solver, status, x, y = _solve_times(inp, inp.time_limit_seconds)
     status_name = STATUS_NAMES.get(status, str(status))
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         msg = (
@@ -167,18 +201,22 @@ def solve(inp: SolverInput) -> SolverResult:
         )
         return SolverResult(ok=False, status=status_name, issues=[msg], seconds=time.monotonic() - started)
 
-    chosen = defaultdict(list)  # slot id -> [sapak indeksi]
+    chosen = defaultdict(list)  # slot id -> [(sapak indeksi, hepde ýa-da None)]
     for (i, sid), v in x.items():
         if solver.value(v):
-            chosen[sid].append(i)
+            chosen[sid].append((i, None))
+    for (i, w, sid), v in y.items():
+        if solver.value(v):
+            chosen[sid].append((i, w))
 
     placements, issues = [], []
-    for sid, idxs in chosen.items():
-        rooms = assign_rooms(inp.rooms, {i: inp.lessons[i] for i in idxs})
+    for sid, keys in chosen.items():
+        clashes = [[k for k in keys if k[1] in (None, w)] for w in range(1, inp.weeks + 1)]
+        rooms = assign_rooms(inp.rooms, {k: inp.lessons[k[0]] for k in keys}, clashes)
         if rooms is None:
             issues.append(f"Slot id={sid}: otaglary bölüp bolmady, sapaklar otagsyz goýuldy.")
             rooms = {}
-        placements += [Placement(inp.lessons[i].key, sid, rooms.get(i)) for i in idxs]
+        placements += [Placement(inp.lessons[i].key, sid, rooms.get((i, w)), w) for i, w in keys]
 
     return SolverResult(
         ok=True,

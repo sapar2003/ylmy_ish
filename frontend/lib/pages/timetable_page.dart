@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
+import '../theme.dart';
 import 'dialogs.dart';
 
 enum ViewBy { group, teacher, room }
@@ -24,6 +26,9 @@ class _TimetablePageState extends State<TimetablePage> {
   ViewBy _viewBy = ViewBy.group;
   int? _targetId;
   List<Map<String, dynamic>> _entries = [];
+  Map<int, String> _teacherFaculty = {};
+  DateTime? _weekStart; // görkezilýän hepdäniň duşenbesi (ýarymýylyň seneleri bar bolsa)
+  int _week = 1; // seneleri ýok iki hepdelik raspisaniýede saýlanan hepde
   Timer? _poll;
   bool _loading = true;
 
@@ -48,6 +53,7 @@ class _TimetablePageState extends State<TimetablePage> {
         Api.instance.list('rooms'),
         Api.instance.list('time-slots'),
       ]);
+      final faculties = await loadTeacherFaculties(r[2] as List<Map<String, dynamic>>);
       if (!mounted) return;
       setState(() {
         _timetables = (r[0] as List).cast<Map<String, dynamic>>();
@@ -55,6 +61,7 @@ class _TimetablePageState extends State<TimetablePage> {
         _targets[ViewBy.teacher] = r[2] as List<Map<String, dynamic>>;
         _targets[ViewBy.room] = r[3] as List<Map<String, dynamic>>;
         _slots = r[4] as List<Map<String, dynamic>>;
+        _teacherFaculty = faculties;
         _current ??= _timetables.where((t) => t['status'] == 'done').firstOrNull ?? _timetables.firstOrNull;
         _targetId ??= _targets[_viewBy]!.firstOrNull?['id'] as int?;
         _loading = false;
@@ -98,51 +105,116 @@ class _TimetablePageState extends State<TimetablePage> {
       ViewBy.teacher => 'teacher_id',
       ViewBy.room => 'room_id',
     };
-    final entries = await Api.instance.get('timetables/${tt['id']}/entries', {key: _targetId});
+    final start = _semesterStart(tt);
+    if (start != null) _weekStart ??= _initialWeek(tt);
+    final entries = await Api.instance.get('timetables/${tt['id']}/entries', {
+      key: _targetId,
+      if (start != null) 'on': _iso(_weekStart!) else if (tt['weeks'] == 2) 'week': _week,
+    });
     if (mounted) setState(() => _entries = (entries as List).cast<Map<String, dynamic>>());
   }
 
   Future<void> _generate() async {
-    final check = await Api.instance.get('timetables/precheck') as Map<String, dynamic>;
+    final checks = await Future.wait([
+      for (final weeks in [1, 2]) Api.instance.get('timetables/precheck', {'weeks': weeks}),
+    ]);
     if (!mounted) return;
-    final issues = (check['issues'] as List).cast<String>();
-    final nameCtl = TextEditingController(text: 'Raspisaniýe ${DateTime.now().toString().substring(0, 16)}');
+    final now = DateTime.now();
+    final autumn = now.month >= 7; // güýz ýarymýyly: 1-nji sentýabr – 31-nji dekabr; ýaz: 1-nji fewral – 30-njy iýun
+    final nameCtl = TextEditingController(text: 'Raspisaniýe ${now.toString().substring(0, 16)}');
+    final startCtl = TextEditingController(text: _iso(autumn ? DateTime(now.year, 9, 1) : DateTime(now.year, 2, 1)));
+    final endCtl = TextEditingController(text: _iso(autumn ? DateTime(now.year, 12, 31) : DateTime(now.year, 6, 30)));
+    var twoWeeks = true;
+    String? dateError;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Täze raspisaniýe düzmek'),
-        content: SizedBox(
-          width: 480,
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Ady')),
-            const SizedBox(height: 16),
-            Text('${check['lessons']} sapak, hepdede jemi ${check['lessons_per_week']} jübüt.'),
-            const SizedBox(height: 8),
-            if (issues.isEmpty)
-              const Row(children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Barlag geçdi: maglumatlarda ýalňyşlyk tapylmady.'),
-              ])
-            else ...[
-              Text('Barlagda ${issues.length} mesele tapyldy:', style: const TextStyle(fontWeight: FontWeight.w600)),
-              for (final i in issues.take(8)) Text('• $i'),
-            ],
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Ýatyr')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Düz')),
-        ],
-      ),
+      builder: (c) => StatefulBuilder(builder: (c, setDialog) {
+        final check = checks[twoWeeks ? 1 : 0] as Map<String, dynamic>;
+        final issues = (check['issues'] as List).cast<String>();
+        return AlertDialog(
+          title: const Text('Täze raspisaniýe düzmek'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                TextField(controller: nameCtl, decoration: const InputDecoration(labelText: 'Ady')),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Iki hepdelik (1-nji / 2-nji hepde)'),
+                  subtitle: const Text('"Iki hepdede bir" sapaklar diňe öz hepdesinde goýulýar'),
+                  value: twoWeeks,
+                  onChanged: (v) => setDialog(() => twoWeeks = v),
+                ),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: startCtl,
+                      decoration: const InputDecoration(labelText: 'Ýarymýylyň başy', hintText: 'ÝÝÝÝ-AA-GG'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: endCtl,
+                      decoration: const InputDecoration(labelText: 'Ýarymýylyň ahyry', hintText: 'ÝÝÝÝ-AA-GG'),
+                    ),
+                  ),
+                ]),
+                if (dateError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(dateError!, style: TextStyle(color: Theme.of(c).colorScheme.error)),
+                  ),
+                const SizedBox(height: 16),
+                Text('${check['lessons']} sapak, iki hepdede bir sapaklar bilen jemi ${check['lessons_per_week']}.'),
+                const SizedBox(height: 8),
+                if (issues.isEmpty)
+                  const Row(children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Barlag geçdi: maglumatlarda ýalňyşlyk tapylmady.'),
+                  ])
+                else ...[
+                  Text('Barlagda ${issues.length} mesele tapyldy:',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  for (final i in issues.take(8)) Text('• $i'),
+                ],
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Ýatyr')),
+            FilledButton(
+              onPressed: () {
+                final a = DateTime.tryParse(startCtl.text.trim());
+                final b = DateTime.tryParse(endCtl.text.trim());
+                if (a == null || b == null || b.isBefore(a)) {
+                  setDialog(() => dateError = 'Seneleri ÝÝÝÝ-AA-GG görnüşinde giriziň, ahyry başyndan soň bolsun.');
+                  return;
+                }
+                Navigator.pop(c, true);
+              },
+              child: const Text('Düz'),
+            ),
+          ],
+        );
+      }),
     );
     if (ok != true) return;
     try {
-      final tt = await Api.instance.post('timetables', {'name': nameCtl.text, 'time_limit_seconds': 60});
+      final tt = await Api.instance.post('timetables', {
+        'name': nameCtl.text,
+        'time_limit_seconds': twoWeeks ? 600 : 300,
+        'weeks': twoWeeks ? 2 : 1,
+        'starts_on': startCtl.text.trim(),
+        'ends_on': endCtl.text.trim(),
+      });
       setState(() {
         _current = tt as Map<String, dynamic>;
         _timetables = [tt, ..._timetables];
         _entries = [];
+        _weekStart = null;
       });
       _watchCurrent();
     } on ApiException catch (e) {
@@ -154,10 +226,10 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Raspisaniýe', style: Theme.of(context).textTheme.headlineSmall),
+          const PageTitle(title: 'Raspisaniýe', icon: Icons.calendar_view_week, color: AppColors.schedule),
           const SizedBox(width: 24),
           if (_timetables.isNotEmpty)
             DropdownButton<int>(
@@ -167,7 +239,10 @@ class _TimetablePageState extends State<TimetablePage> {
                   DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}  (${_statusText(t)})')),
               ],
               onChanged: (id) {
-                setState(() => _current = _timetables.firstWhere((t) => t['id'] == id));
+                setState(() {
+                  _current = _timetables.firstWhere((t) => t['id'] == id);
+                  _weekStart = null;
+                });
                 _watchCurrent();
                 _loadEntries();
               },
@@ -181,6 +256,7 @@ class _TimetablePageState extends State<TimetablePage> {
         ]),
         const SizedBox(height: 12),
         if (_current != null) _statusBanner(_current!),
+        if (_current != null && _current!['status'] == 'done') _weekBar(_current!),
         const SizedBox(height: 12),
         Row(children: [
           SegmentedButton<ViewBy>(
@@ -204,7 +280,10 @@ class _TimetablePageState extends State<TimetablePage> {
             hint: const Text('Saýlaň'),
             items: [
               for (final t in _targets[_viewBy]!)
-                DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}')),
+                DropdownMenuItem(
+                  value: t['id'] as int,
+                  child: Text(_viewBy == ViewBy.teacher ? withFaculty(t, _teacherFaculty) : '${t['name']}'),
+                ),
             ],
             onChanged: (id) {
               setState(() => _targetId = id);
@@ -214,6 +293,83 @@ class _TimetablePageState extends State<TimetablePage> {
         ]),
         const SizedBox(height: 12),
         Expanded(child: _grid()),
+      ]),
+    );
+  }
+
+  // --- Hepdeler we seneler ---
+  static DateTime _monday(DateTime d) => DateTime(d.year, d.month, d.day - (d.weekday - 1));
+
+  String _iso(DateTime d) => d.toIso8601String().substring(0, 10);
+
+  String _ddmm(DateTime d) => '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
+
+  DateTime? _semesterStart(Map<String, dynamic> tt) =>
+      tt['starts_on'] == null ? null : _monday(DateTime.parse(tt['starts_on']));
+
+  DateTime? _semesterEnd(Map<String, dynamic> tt) =>
+      tt['ends_on'] == null ? null : _monday(DateTime.parse(tt['ends_on']));
+
+  /// Şu günüň hepdesi (ýarymýylyň içinde bolsa), ýogsam ýarymýylyň ilkinji hepdesi.
+  DateTime _initialWeek(Map<String, dynamic> tt) {
+    final start = _semesterStart(tt)!;
+    final end = _semesterEnd(tt) ?? start;
+    final today = _monday(DateTime.now());
+    return today.isBefore(start) || today.isAfter(end) ? start : today;
+  }
+
+  /// Ýarymýylyň başyndan n-nji hepde (1-den başlap).
+  int _weekIndex(Map<String, dynamic> tt, DateTime monday) =>
+      monday.difference(_semesterStart(tt)!).inDays ~/ 7 + 1;
+
+  Widget _weekBar(Map<String, dynamic> tt) {
+    final start = _semesterStart(tt);
+    final twoWeeks = tt['weeks'] == 2;
+    if (start == null) {
+      if (!twoWeeks) return const SizedBox();
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 1, label: Text('1-nji hepde')),
+            ButtonSegment(value: 2, label: Text('2-nji hepde')),
+          ],
+          selected: {_week},
+          onSelectionChanged: (s) {
+            setState(() => _week = s.first);
+            _loadEntries();
+          },
+        ),
+      );
+    }
+    final week = _weekStart ?? _initialWeek(tt);
+    final end = _semesterEnd(tt) ?? start;
+    final n = _weekIndex(tt, week);
+    void go(DateTime w) {
+      setState(() => _weekStart = w);
+      _loadEntries();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(children: [
+        IconButton(
+          tooltip: 'Öňki hepde',
+          icon: const Icon(Icons.chevron_left),
+          onPressed: week.isAfter(start) ? () => go(week.subtract(const Duration(days: 7))) : null,
+        ),
+        Text(
+          '$n-nji hepde: ${_ddmm(week)} – ${_ddmm(week.add(const Duration(days: 6)))}.${week.year}'
+          '${twoWeeks ? '  ·  ${(n - 1) % 2 + 1}-nji hepdäniň raspisaniýesi' : ''}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        IconButton(
+          tooltip: 'Indiki hepde',
+          icon: const Icon(Icons.chevron_right),
+          onPressed: week.isBefore(end) ? () => go(week.add(const Duration(days: 7))) : null,
+        ),
+        const SizedBox(width: 8),
+        TextButton(onPressed: () => go(_initialWeek(tt)), child: const Text('Şu hepde')),
       ]),
     );
   }
@@ -275,27 +431,35 @@ class _TimetablePageState extends State<TimetablePage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
-          border: TableBorder.all(color: Theme.of(context).dividerColor),
+          border: TableBorder.all(color: AppColors.primary.withValues(alpha: 0.12)),
           defaultColumnWidth: const FixedColumnWidth(190),
           columnWidths: const {0: FixedColumnWidth(90)},
           defaultVerticalAlignment: TableCellVerticalAlignment.top,
           children: [
             TableRow(
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [AppColors.sidebarTop, AppColors.primary]),
+              ),
               children: [
-                const Padding(padding: EdgeInsets.all(8), child: Text('Wagt')),
+                const Padding(padding: EdgeInsets.all(8), child: Text('Wagt', style: gridHeadStyle)),
                 for (final d in days)
                   Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(weekdays[d - 1], style: const TextStyle(fontWeight: FontWeight.w600)),
+                    child: Text(
+                      _weekStart == null
+                          ? weekdays[d - 1]
+                          : '${weekdays[d - 1]}, ${_ddmm(_weekStart!.add(Duration(days: d - 1)))}',
+                      style: gridHeadStyle,
+                    ),
                   ),
               ],
             ),
             for (final t in times)
-              TableRow(children: [
+              TableRow(decoration: const BoxDecoration(color: Colors.white), children: [
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text('${t.substring(0, 5)}\n${t.split('|')[1].substring(0, 5)}'),
+                  child: Text('${t.substring(0, 5)}\n${t.split('|')[1].substring(0, 5)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.schedule)),
                 ),
                 for (final d in days) _cell(d, t),
               ]),
@@ -315,31 +479,25 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Widget _lessonCard(Map<String, dynamic> e) {
     final type = e['lesson_type'] as String;
-    final color = switch (type) {
-      'lecture' => Colors.indigo,
-      'lab' => Colors.teal,
-      'seminar' => Colors.orange,
-      _ => Colors.blueGrey,
-    };
+    final color = AppColors.lesson(type);
     final groups = (e['stream'] != null ? e['stream']['name'] : (e['groups'] as List).map((g) => g['name']).join(', '));
     final sub = e['subgroup'] != null ? ' · ${e['subgroup']['name']}-nji kiçi topar' : '';
     final lines = [
-      if (_viewBy != ViewBy.teacher) '${e['teacher']['name']}',
+      if (_viewBy != ViewBy.teacher) withFaculty(e['teacher'], _teacherFaculty),
       if (_viewBy != ViewBy.group) '$groups$sub' else if (sub.isNotEmpty) sub.substring(3),
       if (_viewBy != ViewBy.room) 'Otag ${e['room']?['name'] ?? '—'}',
     ];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(3),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        border: Border(left: BorderSide(color: color, width: 3)),
-        borderRadius: BorderRadius.circular(4),
-      ),
+      padding: const EdgeInsets.fromLTRB(9, 7, 8, 7),
+      decoration: lessonDecoration(color),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${e['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        Text(lessonTypes[type] ?? type, style: TextStyle(fontSize: 11, color: color)),
+        Text(
+          '${lessonTypes[type] ?? type}${e['week'] != null ? ' · iki hepdede bir (${e['week']}-nji hepde)' : ''}',
+          style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
+        ),
         for (final l in lines) Text(l, style: const TextStyle(fontSize: 12)),
       ]),
     );

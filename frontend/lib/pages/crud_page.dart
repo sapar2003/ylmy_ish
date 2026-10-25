@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../resources.dart';
+import '../theme.dart';
 import 'dialogs.dart';
 
 /// Islendik sanaw üçin umumy sahypa: tablisa, gözleg, goşmak, üýtgetmek, aýyrmak.
@@ -17,6 +18,8 @@ class _CrudPageState extends State<CrudPage> {
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _refs = {};
   String _query = '';
+  int? _faculty; // null: hemmesi, _common: fakulteti görkezilmedik (umumy)
+  static const _common = -1;
   bool _loading = true;
   String? _error;
 
@@ -33,6 +36,7 @@ class _CrudPageState extends State<CrudPage> {
     super.didUpdateWidget(old);
     if (old.spec.endpoint != spec.endpoint) {
       _query = '';
+      _faculty = null;
       _load();
     }
   }
@@ -43,7 +47,10 @@ class _CrudPageState extends State<CrudPage> {
       _error = null;
     });
     try {
-      final refNames = spec.fields.map((f) => f.ref).whereType<String>().toSet();
+      final refNames = {
+        ...spec.fields.map((f) => f.ref).whereType<String>(),
+        if (spec.facultyFilter != null) ...['faculties', 'departments'],
+      };
       final results = await Future.wait([
         Api.instance.list(spec.endpoint),
         for (final r in refNames) Api.instance.list(r),
@@ -83,6 +90,45 @@ class _CrudPageState extends State<CrudPage> {
     }
   }
 
+  /// Ýazgynyň fakulteti (otagda göni, mugallymda kafedrasy arkaly); null — umumy.
+  int? _facultyOf(Map<String, dynamic> item) => switch (spec.facultyFilter) {
+        FacultyVia.faculty => item['faculty_id'] as int?,
+        FacultyVia.department => _refs['departments']
+            ?.where((d) => d['id'] == item['department_id'])
+            .firstOrNull?['faculty_id'] as int?,
+        null => null,
+      };
+
+  String _facultyLabel(Map<String, dynamic> f) => '${f['short_name'] ?? f['name']}';
+
+  Widget _facultyChips() {
+    final faculties = _refs['faculties'] ?? [];
+    int count(int? id) => _items.where((i) => id == null || (_facultyOf(i) ?? _common) == id).length;
+    final hasCommon = _items.any((i) => _facultyOf(i) == null);
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      ChoiceChip(
+        label: Text('Hemmesi (${count(null)})'),
+        selected: _faculty == null,
+        onSelected: (_) => setState(() => _faculty = null),
+      ),
+      for (final f in faculties)
+        if (count(f['id'] as int) > 0)
+          ChoiceChip(
+            label: Text('${_facultyLabel(f)} (${count(f['id'] as int)})'),
+            tooltip: '${f['name']}',
+            selected: _faculty == f['id'],
+            onSelected: (_) => setState(() => _faculty = f['id'] as int),
+          ),
+      if (hasCommon)
+        ChoiceChip(
+          label: Text('Umumy (${count(_common)})'),
+          tooltip: 'Fakulteti görkezilmedik: ähli fakultetler ulanyp bilýär',
+          selected: _faculty == _common,
+          onSelected: (_) => setState(() => _faculty = _common),
+        ),
+    ]);
+  }
+
   String _refName(String ref, dynamic id) =>
       _refs[ref]?.firstWhere((r) => r['id'] == id, orElse: () => {'name': '#$id'})['name'] ?? '#$id';
 
@@ -120,19 +166,23 @@ class _CrudPageState extends State<CrudPage> {
     final columns = spec.fields.where((f) => f.showInTable).toList();
     final q = _query.toLowerCase();
     final rows = _items.where((item) {
+      if (_faculty != null && (_facultyOf(item) ?? _common) != _faculty) return false;
       if (q.isEmpty) return true;
       return columns.any((f) => _display(f, item[f.key]).toLowerCase().contains(q));
     }).toList();
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text(spec.title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(width: 12),
-            if (!_loading) Chip(label: Text('${_items.length}')),
+            PageTitle(
+              title: spec.title,
+              icon: resourceIcons[spec.endpoint] ?? Icons.list,
+              color: sectionColor(spec.endpoint),
+              count: _loading ? null : _items.length,
+            ),
             const Spacer(),
             SizedBox(
               width: 240,
@@ -140,8 +190,6 @@ class _CrudPageState extends State<CrudPage> {
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
                   hintText: 'Gözle',
-                  isDense: true,
-                  border: OutlineInputBorder(),
                 ),
                 onChanged: (v) => setState(() => _query = v),
               ),
@@ -153,6 +201,10 @@ class _CrudPageState extends State<CrudPage> {
               label: Text('${spec.singular} goş'),
             ),
           ]),
+          if (spec.facultyFilter != null && !_loading && _items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _facultyChips(),
+          ],
           const SizedBox(height: 16),
           Expanded(child: _body(columns, rows)),
         ],
@@ -180,15 +232,18 @@ class _CrudPageState extends State<CrudPage> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
-            headingRowColor: WidgetStatePropertyAll(Theme.of(context).colorScheme.surfaceContainerHighest),
+            headingRowColor: WidgetStatePropertyAll(sectionColor(spec.endpoint).withValues(alpha: 0.14)),
             columns: [
               for (final f in columns) DataColumn(label: Text(f.label)),
+              if (spec.facultyFilter == FacultyVia.department) const DataColumn(label: Text('Fakultet')),
               const DataColumn(label: Text('')),
             ],
             rows: [
               for (final item in rows)
                 DataRow(cells: [
                   for (final f in columns) DataCell(Text(_display(f, item[f.key]))),
+                  if (spec.facultyFilter == FacultyVia.department)
+                    DataCell(Text(_facultyOf(item) == null ? '—' : _refName('faculties', _facultyOf(item)))),
                   DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                     for (final a in spec.actions)
                       TextButton(onPressed: () => _action(a, item), child: Text(actionLabel(a))),

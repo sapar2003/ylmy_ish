@@ -74,3 +74,32 @@ def test_iogu_dataset_generates_without_conflicts(client):
     entries = client.get(f"/api/v1/timetables/{tt['id']}/entries").json()
     assert max(Counter((e["teacher"]["id"], e["time_slot_id"]) for e in entries).values()) == 1
     assert max(Counter((e["room"]["id"], e["time_slot_id"]) for e in entries).values()) == 1
+
+
+def test_two_week_timetable_with_semester_dates(client):
+    seeded(client)
+    items = client.get("/api/v1/curriculum?limit=500").json()["items"]
+    item = next(i for i in items if i["lessons_per_week"] >= 2 and not i["split"] and i["group_id"])
+    r = client.patch(f"/api/v1/curriculum/{item['id']}",
+                     json={"lessons_per_week": item["lessons_per_week"] - 1, "biweekly": 1})
+    assert r.status_code == 200 and r.json()["biweekly"] == 1
+    assert client.patch(f"/api/v1/curriculum/{item['id']}",
+                        json={"lessons_per_week": 0, "biweekly": 0}).status_code == 422
+
+    assert client.get("/api/v1/timetables/precheck?weeks=2").json()["issues"] == []
+    r = client.post("/api/v1/timetables", json={"name": "Iki hepde", "time_limit_seconds": 20, "weeks": 2,
+                                                "starts_on": "2026-09-01", "ends_on": "2026-12-31"})
+    tt = client.get(f"/api/v1/timetables/{r.json()['id']}").json()
+    assert tt["status"] == "done", tt["issues"]
+    assert (tt["weeks"], tt["starts_on"]) == (2, "2026-09-01")
+
+    url = f"/api/v1/timetables/{tt['id']}/entries"
+    biweekly = [e for e in client.get(url).json() if e["week"] is not None]
+    assert len(biweekly) == 1
+    w = biweekly[0]["week"]
+    # 1-nji sentýabryň hepdesi 1-nji hepde, indiki hepde 2-nji, ondan soňky ýene 1-nji.
+    on_first = client.get(f"{url}?on=2026-09-03").json()
+    on_second = client.get(f"{url}?on=2026-09-08").json()
+    assert any(e["week"] == w for e in (on_first if w == 1 else on_second))
+    assert not any(e["week"] == w for e in (on_second if w == 1 else on_first))
+    assert client.get(f"{url}?on=2026-09-15").json() == on_first

@@ -1,4 +1,5 @@
 from alembic import context
+from sqlalchemy import create_engine
 
 from app import models  # noqa: F401  (modelleri metadata-a hasaba alýar)
 from app.core.config import settings
@@ -15,7 +16,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = make_engine(settings.database_url)
+    # SQLite-de batch migrasiýa tablisany pozup täzeden gurýar: daşary açar barlagy açyk bolsa,
+    # ON DELETE CASCADE bagly ýazgylary (meselem, mugallym bellemeleri) pozardy. Şonuň üçin FK-syz.
+    url = settings.database_url
+    engine = create_engine(url) if url.startswith("sqlite") else make_engine(url)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

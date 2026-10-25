@@ -30,6 +30,7 @@ class ResourceSpec {
     required this.singular,
     required this.fields,
     this.actions = const [],
+    this.facultyFilter,
   });
 
   final String endpoint;
@@ -37,7 +38,13 @@ class ResourceSpec {
   final String singular;
   final List<FieldSpec> fields;
   final List<RowAction> actions;
+
+  /// Sanawy fakultet boýunça süzmek: ýazgynyň haýsy meýdany fakultete eltýär.
+  final FacultyVia? facultyFilter;
 }
+
+/// `faculty_id` — ýazgynyň öz meýdany (otag); `department_id` — kafedra arkaly (mugallym).
+enum FacultyVia { faculty, department }
 
 const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe', 'seminar': 'Seminar'};
 const levels = {'bachelor': 'Bakalawr', 'master': 'Magistr'};
@@ -95,6 +102,7 @@ const resources = <ResourceSpec>[
     title: 'Mugallymlar',
     singular: 'Mugallym',
     actions: [RowAction.availability],
+    facultyFilter: FacultyVia.department,
     fields: [
       FieldSpec('name', 'Ady'),
       FieldSpec('position', 'Wezipesi', required: false),
@@ -110,7 +118,7 @@ const resources = <ResourceSpec>[
   ResourceSpec(endpoint: 'room-types', title: 'Otag görnüşleri', singular: 'Otag görnüşi', fields: [
     FieldSpec('name', 'Ady'),
   ]),
-  ResourceSpec(endpoint: 'rooms', title: 'Otaglar', singular: 'Otag', fields: [
+  ResourceSpec(endpoint: 'rooms', title: 'Otaglar', singular: 'Otag', facultyFilter: FacultyVia.faculty, fields: [
     FieldSpec('name', 'Ady'),
     FieldSpec('capacity', 'Sygymy', type: FieldType.integer),
     FieldSpec('building_id', 'Bina', type: FieldType.ref, ref: 'buildings'),
@@ -136,7 +144,8 @@ const resources = <ResourceSpec>[
       FieldSpec('stream_id', 'Potok', type: FieldType.ref, ref: 'streams', required: false),
       FieldSpec('subject_id', 'Ders', type: FieldType.ref, ref: 'subjects'),
       FieldSpec('lesson_type', 'Görnüşi', type: FieldType.choice, choices: lessonTypes),
-      FieldSpec('lessons_per_week', 'Hepdede', type: FieldType.integer),
+      FieldSpec('lessons_per_week', 'Her hepde', type: FieldType.integer),
+      FieldSpec('biweekly', 'Iki hepdede bir', type: FieldType.integer, required: false),
       FieldSpec('split', 'Bölünýär', type: FieldType.boolean, required: false),
       FieldSpec('room_type_id', 'Otag görnüşi', type: FieldType.ref, ref: 'room-types', required: false),
     ],
