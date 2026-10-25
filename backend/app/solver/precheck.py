@@ -4,11 +4,18 @@ from collections import defaultdict
 from app.solver.model import SolverInput
 
 
-def eligible_rooms(inp: SolverInput, lesson) -> list:
-    return [
-        r for r in inp.rooms
-        if r.capacity >= lesson.size and (lesson.room_type_id is None or r.room_type_id == lesson.room_type_id)
-    ]
+def room_allowed(room, item) -> bool:
+    """Otagyň görnüşi we fakulteti laýykmy (sygymy hasaba alynmaýar).
+
+    `item` sapak ýa-da synag bolup biler: `room_type_id` we `faculty_ids` meýdanlary bolmaly.
+    """
+    return (item.room_type_id is None or room.room_type_id == item.room_type_id) and (
+        room.faculty_id is None or not item.faculty_ids or room.faculty_id in item.faculty_ids
+    )
+
+
+def eligible_rooms(rooms, item) -> list:
+    return [r for r in rooms if r.capacity >= item.size and room_allowed(r, item)]
 
 
 def teacher_slots(inp: SolverInput, lesson) -> set[int]:
@@ -30,8 +37,10 @@ def precheck(inp: SolverInput) -> list[str]:
                 f"{lesson.label or lesson.key}: hepdede {lesson.per_week} sapak gerek, ýöne mugallymyň we toparyň "
                 f"umumy boş slotlary diňe {len(free)}."
             )
-        if not eligible_rooms(inp, lesson):
-            issues.append(f"{lesson.label or lesson.key}: {lesson.size} talyp üçin laýyk otag (sygymy/görnüşi) ýok.")
+        if not eligible_rooms(inp.rooms, lesson):
+            issues.append(
+                f"{lesson.label or lesson.key}: {lesson.size} talyp üçin laýyk otag (sygymy/görnüşi/fakulteti) ýok."
+            )
         teacher_load[lesson.teacher_id] += lesson.per_week
         teacher_free[lesson.teacher_id] |= free
         for g in lesson.group_ids:

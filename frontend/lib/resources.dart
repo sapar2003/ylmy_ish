@@ -1,5 +1,5 @@
 /// Ähli sanaw sahypalarynyň beýany. Täze sanaw goşmak = bu ýere bir `ResourceSpec`.
-enum FieldType { text, integer, ref, refList, choice, boolean, time }
+enum FieldType { text, integer, ref, refList, choice, boolean, time, date, weekdays }
 
 class FieldSpec {
   const FieldSpec(
@@ -42,6 +42,13 @@ class ResourceSpec {
 const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe', 'seminar': 'Seminar'};
 const levels = {'bachelor': 'Bakalawr', 'master': 'Magistr'};
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
+const examKinds = {
+  'midterm': 'Ara synag',
+  'final': 'Ýarymýyllyk synag',
+  'retake': 'Gaýtadan tabşyrmak',
+  'state': 'Döwlet synagy',
+  'other': 'Başga',
+};
 
 const resources = <ResourceSpec>[
   ResourceSpec(endpoint: 'faculties', title: 'Fakultetler', singular: 'Fakultet', fields: [
@@ -108,6 +115,7 @@ const resources = <ResourceSpec>[
     FieldSpec('capacity', 'Sygymy', type: FieldType.integer),
     FieldSpec('building_id', 'Bina', type: FieldType.ref, ref: 'buildings'),
     FieldSpec('room_type_id', 'Görnüşi', type: FieldType.ref, ref: 'room-types'),
+    FieldSpec('faculty_id', 'Fakultet', type: FieldType.ref, ref: 'faculties', required: false),
   ]),
   ResourceSpec(endpoint: 'subjects', title: 'Dersler', singular: 'Ders', fields: [
     FieldSpec('name', 'Ady'),
@@ -133,4 +141,28 @@ const resources = <ResourceSpec>[
       FieldSpec('room_type_id', 'Otag görnüşi', type: FieldType.ref, ref: 'room-types', required: false),
     ],
   ),
+  ResourceSpec(endpoint: 'exam-sessions', title: 'Synag möwsümleri', singular: 'Synag möwsümi', fields: [
+    FieldSpec('name', 'Ady'),
+    FieldSpec('kind', 'Görnüşi', type: FieldType.choice, choices: examKinds),
+    FieldSpec('starts_on', 'Başlanýar', type: FieldType.date),
+    FieldSpec('ends_on', 'Gutarýar', type: FieldType.date),
+    FieldSpec('weekdays', 'Synag günleri', type: FieldType.weekdays),
+    FieldSpec('max_per_day', 'Toparyň günde iň köp synagy', type: FieldType.integer),
+    FieldSpec('rest_days', 'Synaglaryň arasynda boş gün', type: FieldType.integer),
+  ]),
+  ResourceSpec(endpoint: 'exam-periods', title: 'Synag wagtlary', singular: 'Synag wagty', fields: [
+    FieldSpec('session_id', 'Möwsüm', type: FieldType.ref, ref: 'exam-sessions'),
+    FieldSpec('number', 'Belgisi', type: FieldType.integer),
+    FieldSpec('starts_at', 'Başlanýar', type: FieldType.time),
+    FieldSpec('ends_at', 'Gutarýar', type: FieldType.time),
+  ]),
+  ResourceSpec(endpoint: 'exams', title: 'Synaglar', singular: 'Synag', fields: [
+    FieldSpec('session_id', 'Möwsüm', type: FieldType.ref, ref: 'exam-sessions'),
+    FieldSpec('group_id', 'Topar', type: FieldType.ref, ref: 'groups', required: false),
+    FieldSpec('stream_id', 'Potok', type: FieldType.ref, ref: 'streams', required: false),
+    FieldSpec('subject_id', 'Ders', type: FieldType.ref, ref: 'subjects'),
+    FieldSpec('examiner_id', 'Uly mugallym', type: FieldType.ref, ref: 'teachers'),
+    FieldSpec('assistant_id', 'Kiçi mugallym', type: FieldType.ref, ref: 'teachers', required: false),
+    FieldSpec('room_type_id', 'Otag görnüşi', type: FieldType.ref, ref: 'room-types', required: false),
+  ]),
 ];

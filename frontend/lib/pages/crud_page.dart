@@ -76,6 +76,8 @@ class _CrudPageState extends State<CrudPage> {
         return value == true ? 'Hawa' : 'Ýok';
       case FieldType.time:
         return '$value'.substring(0, 5);
+      case FieldType.weekdays:
+        return (value as List).map((d) => weekdays[d - 1].substring(0, 2)).join(', ');
       default:
         return '$value';
     }
