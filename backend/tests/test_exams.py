@@ -38,6 +38,14 @@ def test_group_one_exam_per_day_and_teachers_not_double_booked():
     assert both[0] != both[1]
 
 
+def test_group_never_has_two_exams_at_once():
+    # Günde 2 synag rugsat, ýöne bir wagtda däl.
+    exams = [exam(f"e{i}", [1], [i]) for i in range(4)]
+    inp, r = solve(exams, max_per_day=2, slots=slots(days=2, periods=2))
+    assert r.ok, r.issues
+    assert len({p.slot_id for p in r.placements}) == 4
+
+
 def test_rest_days_between_exams():
     exams = [exam(f"e{i}", [1], [i]) for i in range(3)]
     inp, r = solve(exams, rest_days=1)
