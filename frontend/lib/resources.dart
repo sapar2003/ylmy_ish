@@ -30,6 +30,7 @@ class ResourceSpec {
     required this.singular,
     required this.fields,
     this.actions = const [],
+    this.facultyFilter,
   });
 
   final String endpoint;
@@ -37,7 +38,13 @@ class ResourceSpec {
   final String singular;
   final List<FieldSpec> fields;
   final List<RowAction> actions;
+
+  /// Sanawy fakultet boýunça süzmek: ýazgynyň haýsy meýdany fakultete eltýär.
+  final FacultyVia? facultyFilter;
 }
+
+/// `faculty_id` — ýazgynyň öz meýdany (otag); `department_id` — kafedra arkaly (mugallym).
+enum FacultyVia { faculty, department }
 
 const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe', 'seminar': 'Seminar'};
 const levels = {'bachelor': 'Bakalawr', 'master': 'Magistr'};
@@ -95,6 +102,7 @@ const resources = <ResourceSpec>[
     title: 'Mugallymlar',
     singular: 'Mugallym',
     actions: [RowAction.availability],
+    facultyFilter: FacultyVia.department,
     fields: [
       FieldSpec('name', 'Ady'),
       FieldSpec('position', 'Wezipesi', required: false),
@@ -110,7 +118,7 @@ const resources = <ResourceSpec>[
   ResourceSpec(endpoint: 'room-types', title: 'Otag görnüşleri', singular: 'Otag görnüşi', fields: [
     FieldSpec('name', 'Ady'),
   ]),
-  ResourceSpec(endpoint: 'rooms', title: 'Otaglar', singular: 'Otag', fields: [
+  ResourceSpec(endpoint: 'rooms', title: 'Otaglar', singular: 'Otag', facultyFilter: FacultyVia.faculty, fields: [
     FieldSpec('name', 'Ady'),
     FieldSpec('capacity', 'Sygymy', type: FieldType.integer),
     FieldSpec('building_id', 'Bina', type: FieldType.ref, ref: 'buildings'),
