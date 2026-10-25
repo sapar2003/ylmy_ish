@@ -141,9 +141,11 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
       case FieldType.choice:
         return DropdownButtonFormField<String>(
           initialValue: value as String?,
+          isExpanded: true, // uzyn atlar meýdandan çykmasyn
           decoration: _decoration(f),
           items: [
-            for (final e in f.choices!.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+            for (final e in f.choices!.entries)
+              DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
           ],
           validator: (v) => _requiredCheck(f, v),
           onChanged: (v) => _values[f.key] = v,
@@ -152,10 +154,15 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
         final options = widget.refs[f.ref] ?? [];
         return DropdownButtonFormField<int?>(
           initialValue: value as int?,
+          isExpanded: true, // uzyn atlar (meselem, dersler) meýdandan çykmasyn
           decoration: _decoration(f),
           items: [
             if (!f.required) const DropdownMenuItem<int?>(value: null, child: Text('—')),
-            for (final o in options) DropdownMenuItem<int?>(value: o['id'] as int, child: Text('${o['name']}')),
+            for (final o in options)
+              DropdownMenuItem<int?>(
+                value: o['id'] as int,
+                child: Text('${o['name']}', overflow: TextOverflow.ellipsis),
+              ),
           ],
           validator: (v) => _requiredCheck(f, v),
           onChanged: (v) => _values[f.key] = v,
