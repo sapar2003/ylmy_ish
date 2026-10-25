@@ -1,3 +1,4 @@
+import dataclasses
 from collections import Counter
 
 from app.solver import Lesson, Room, Slot, SolverInput, Teacher, solve
@@ -112,3 +113,27 @@ def test_infeasible_reported():
     lessons = [lesson("a", 1, [1], 8), lesson("b", 1, [2], 8)]
     r = solve(base_input(lessons))
     assert not r.ok
+
+
+def test_two_week_cycle_biweekly_lessons_take_turns():
+    # 1-nji topar: 15 slot, her hepde 14 sapak + iki dersiň her biri iki hepdede bir.
+    # Iki hepdede birler bir slotda nobatlaşyp bilýär (biri 1-nji, beýlekisi 2-nji hepde).
+    weekly = lesson("weekly", 1, [1], 14)
+    a = dataclasses.replace(lesson("a", 2, [1], 0), biweekly=1)
+    b = dataclasses.replace(lesson("b", 3, [1], 0), biweekly=1)
+    inp = dataclasses.replace(base_input([weekly, a, b]), weeks=2)
+    r = solve(inp)
+    assert r.ok, r.issues
+    k = by_key(r)
+    assert all(p.week is None for p in k["weekly"])
+    assert len(k["a"]) == len(k["b"]) == 1
+    assert {k["a"][0].week, k["b"][0].week} == {1, 2}
+    # her hepdede topar bir slotda diňe bir sapakda
+    for w in (1, 2):
+        used = [p.slot_id for p in r.placements if p.week in (None, w)]
+        assert len(used) == len(set(used)) == 15
+
+
+def test_one_week_mode_counts_biweekly_as_weekly():
+    r = solve(base_input([dataclasses.replace(lesson("a", 1, [1], 1), biweekly=1)]))
+    assert r.ok and len(r.placements) == 2 and all(p.week is None for p in r.placements)

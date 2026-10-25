@@ -43,6 +43,9 @@ class Lesson:
     allowed_slots: frozenset[int]  # toparyň smenasy boýunça
     label: str = ""  # adam üçin: "PO-101 · Matematika (amaly) · A. Annaýew"
     faculty_ids: frozenset[int] = frozenset()  # toparlaryň fakultetleri: diňe olaryň we umumy otaglar
+    # Iki hepdede bir geçýän sapaklaryň sany (1-nji ýa-da 2-nji hepdede). Bir hepdelik raspisaniýede
+    # olar her hepde geçýän sapak hasaplanýar.
+    biweekly: int = 0
 
 
 @dataclass
@@ -54,6 +57,7 @@ class SolverInput:
     subgroups_of: dict[int, list[int]] = field(default_factory=dict)  # group_id -> [subgroup_id]
     time_limit_seconds: float = 60
     workers: int = 8
+    weeks: int = 1  # 1: her hepde birmeňzeş; 2: 1-nji we 2-nji hepde (sanawjy/maýdalawjy)
 
 
 @dataclass
@@ -61,6 +65,7 @@ class Placement:
     lesson_key: str
     slot_id: int
     room_id: int | None
+    week: int | None = None  # None: her hepde; 1 ýa-da 2: diňe şol hepde
 
 
 @dataclass

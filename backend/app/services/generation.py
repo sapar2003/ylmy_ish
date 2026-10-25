@@ -31,7 +31,7 @@ def solver_rooms(db: Session) -> list[sv.Room]:
     ]
 
 
-def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput, list[str]]:
+def build_input(db: Session, time_limit_seconds: float, weeks: int = 1) -> tuple[sv.SolverInput, list[str]]:
     """Solwer girişini we solwere girip bilmeýän ýazgylar barada duýduryşlary gaýtarýar."""
     warnings: list[str] = []
     slots = db.scalars(select(m.TimeSlot)).all()
@@ -96,7 +96,7 @@ def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput,
                 label = f"{title} · {teachers[a.teacher_id].name}"
             lessons.append(sv.Lesson(
                 key=str(a.id), curriculum_item_id=item.id, assignment_id=a.id, teacher_id=a.teacher_id,
-                group_ids=tuple(group_ids), subgroup_id=a.subgroup_id, per_week=item.lessons_per_week,
+                group_ids=tuple(group_ids), subgroup_id=a.subgroup_id, per_week=item.lessons_per_week, biweekly=item.biweekly,
                 size=max(size, 1), room_type_id=item.room_type_id, allowed_slots=group_slots(group_ids),
                 label=label, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             ))
@@ -109,7 +109,7 @@ def build_input(db: Session, time_limit_seconds: float) -> tuple[sv.SolverInput,
     inp = sv.SolverInput(
         slots=[sv.Slot(s.id, s.weekday, s.number, s.shift_id) for s in slots],
         rooms=rooms, teachers=teachers, lessons=lessons, subgroups_of=dict(subgroups_of),
-        time_limit_seconds=time_limit_seconds,
+        time_limit_seconds=time_limit_seconds, weeks=weeks,
     )
     return inp, warnings
 
@@ -120,7 +120,7 @@ def run_generation(session_factory: sessionmaker, timetable_id: int) -> None:
         tt.status = m.TimetableStatus.running
         db.commit()
         try:
-            inp, warnings = build_input(db, tt.time_limit_seconds)
+            inp, warnings = build_input(db, tt.time_limit_seconds, tt.weeks)
             if not inp.lessons:
                 result = sv.SolverResult(ok=False, status="empty", issues=["Okuw meýilnamasynda sapak ýok."])
             else:
@@ -128,7 +128,8 @@ def run_generation(session_factory: sessionmaker, timetable_id: int) -> None:
             if result.ok:
                 db.add_all(
                     m.TimetableEntry(
-                        timetable_id=tt.id, assignment_id=int(p.lesson_key), time_slot_id=p.slot_id, room_id=p.room_id
+                        timetable_id=tt.id, assignment_id=int(p.lesson_key), time_slot_id=p.slot_id, room_id=p.room_id,
+                        week=p.week,
                     )
                     for p in result.placements
                 )

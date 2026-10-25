@@ -1,7 +1,8 @@
 """Düzülen raspisaniýeler. Her generasiýa täze `Timetable` döredýär, köne wersiýalar saklanýar."""
 import enum
+from datetime import date
 
-from sqlalchemy import JSON, Enum, Float, ForeignKey, String
+from sqlalchemy import JSON, Date, Enum, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, IdMixin, TimestampMixin
@@ -26,6 +27,10 @@ class Timetable(IdMixin, TimestampMixin, Base):
     issues: Mapped[list[str]] = mapped_column(JSON, default=list)
     objective: Mapped[float | None] = mapped_column(Float)
     seconds: Mapped[float | None] = mapped_column(Float)
+    weeks: Mapped[int] = mapped_column(default=1, server_default="1")  # 2: 1-nji we 2-nji hepde
+    # Ýarymýylyň seneleri: senäniň haýsy hepdedigi (1-nji ýa 2-nji) starts_on-yň hepdesinden sanalýar.
+    starts_on: Mapped[date | None] = mapped_column(Date)
+    ends_on: Mapped[date | None] = mapped_column(Date)
 
     entries: Mapped[list["TimetableEntry"]] = relationship(
         back_populates="timetable", cascade="all, delete-orphan", passive_deletes=True
@@ -41,5 +46,6 @@ class TimetableEntry(IdMixin, Base):
     assignment_id: Mapped[int] = mapped_column(ForeignKey("teaching_assignments.id", ondelete="CASCADE"))
     time_slot_id: Mapped[int] = mapped_column(ForeignKey("time_slots.id", ondelete="CASCADE"))
     room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id", ondelete="SET NULL"))
+    week: Mapped[int | None]  # None: her hepde; 1 ýa-da 2: diňe şol hepde
 
     timetable: Mapped[Timetable] = relationship(back_populates="entries")

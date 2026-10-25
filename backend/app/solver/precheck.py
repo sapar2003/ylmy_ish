@@ -1,4 +1,5 @@
 """Solwerden öň aç-açan mümkin däl ýagdaýlary tapýar we düşnükli habar berýär."""
+import math
 from collections import defaultdict
 
 from app.solver.model import SolverInput
@@ -23,31 +24,38 @@ def teacher_slots(inp: SolverInput, lesson) -> set[int]:
     return set(lesson.allowed_slots) - set(t.unavailable)
 
 
+def week_load(inp: SolverInput, lesson) -> float:
+    """Sapagyň bir hepdä düşýän ortaça sany: iki hepdelik raspisaniýede iki hepdede birler ýarym hasaplanýar."""
+    return lesson.per_week + lesson.biweekly / inp.weeks if inp.weeks == 2 else lesson.per_week + lesson.biweekly
+
+
 def precheck(inp: SolverInput) -> list[str]:
     issues: list[str] = []
-    teacher_load: dict[int, int] = defaultdict(int)
+    teacher_load: dict[int, float] = defaultdict(float)
     teacher_free: dict[int, set[int]] = defaultdict(set)
-    group_load: dict[tuple[int, int | None], int] = defaultdict(int)
+    group_load: dict[tuple[int, int | None], float] = defaultdict(float)
     group_slots: dict[int, set[int]] = defaultdict(set)
 
     for lesson in inp.lessons:
         free = teacher_slots(inp, lesson)
-        if len(free) < lesson.per_week:
+        need = math.ceil(week_load(inp, lesson))
+        if len(free) < need:
             issues.append(
-                f"{lesson.label or lesson.key}: hepdede {lesson.per_week} sapak gerek, ýöne mugallymyň we toparyň "
+                f"{lesson.label or lesson.key}: hepdede {need} sapak gerek, ýöne mugallymyň we toparyň "
                 f"umumy boş slotlary diňe {len(free)}."
             )
         if not eligible_rooms(inp.rooms, lesson):
             issues.append(
                 f"{lesson.label or lesson.key}: {lesson.size} talyp üçin laýyk otag (sygymy/görnüşi/fakulteti) ýok."
             )
-        teacher_load[lesson.teacher_id] += lesson.per_week
+        teacher_load[lesson.teacher_id] += week_load(inp, lesson)
         teacher_free[lesson.teacher_id] |= free
         for g in lesson.group_ids:
-            group_load[(g, lesson.subgroup_id)] += lesson.per_week
+            group_load[(g, lesson.subgroup_id)] += week_load(inp, lesson)
             group_slots[g] |= set(lesson.allowed_slots)
 
     for tid, load in teacher_load.items():
+        load = math.ceil(load)
         t = inp.teachers[tid]
         if t.max_per_week is not None and load > t.max_per_week:
             issues.append(f"Mugallym {t.name}: {load} sapak bellenipdir, hepdelik çäk {t.max_per_week}.")
@@ -58,6 +66,7 @@ def precheck(inp: SolverInput) -> list[str]:
     for g, slots in group_slots.items():
         common = group_load.get((g, None), 0)
         sub_max = max((group_load.get((g, sg), 0) for sg in inp.subgroups_of.get(g, [])), default=0)
-        if common + sub_max > len(slots):
-            issues.append(f"Topar id={g}: hepdede {common + sub_max} sapak, ýöne smenasynda {len(slots)} slot bar.")
+        load = math.ceil(common + sub_max)
+        if load > len(slots):
+            issues.append(f"Topar id={g}: hepdede {load} sapak, ýöne smenasynda {len(slots)} slot bar.")
     return issues
