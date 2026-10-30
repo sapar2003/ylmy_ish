@@ -174,3 +174,21 @@ def test_gaps_measured_by_clock_time_across_shifts():
         idx = sorted(order.index(t) for t in ts)
         assert idx[-1] - idx[0] + 1 == len(idx), (day, sorted(ts))
         assert len(ts) >= 2, (day, ts)
+
+
+def test_subgroups_do_not_wait_for_each_other():
+    # Topar 2 kiçi topara bölünýär: her kiçi toparyň 2 tejribesi, umumy 4 leksiýa (5 gün × 3 jübüt).
+    # Her kiçi toparyň güni (umumy + öz sapaklary) penjiresiz bolmaly: kiçi toparlar biri-birine garaşmasyn.
+    lessons = [lesson(f"lab{sg}-{k}", 10 * sg + k, [1], 1, size=12, subgroup=sg) for sg in (11, 12) for k in (1, 2)]
+    lessons += [lesson(f"lec{k}", k, [1], 1) for k in range(1, 5)]
+    teachers = {t: Teacher(t, f"T{t}") for t in (1, 2, 3, 4, 111, 112, 121, 122)}
+    r = solve(base_input(lessons, teachers=teachers, subgroups_of={1: [11, 12]}))
+    assert r.ok, r.issues
+    k = by_key(r)
+    for sg in (11, 12):
+        mine = [p.slot_id for key, ps in k.items() for p in ps if key.startswith("lec") or key.startswith(f"lab{sg}")]
+        by_day = {}
+        for sid in mine:
+            by_day.setdefault(sid // 10, []).append(sid % 10)
+        for day, nums in by_day.items():
+            assert max(nums) - min(nums) + 1 == len(nums), (sg, day, sorted(nums))

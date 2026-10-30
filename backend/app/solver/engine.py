@@ -65,23 +65,29 @@ def time_ranks(slots) -> dict[int, int]:
     return {sid: order.index(k) + 1 for sid, k in key.items()}
 
 
-def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, group_of_subgroup) -> list:
-    """Toparyň gününiň görnüşi üçin ýumşak çäklendirmeler:
+def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, subgroups_of) -> list:
+    """Talyplaryň gününiň görnüşi üçin ýumşak çäklendirmeler:
     - sapaklaryň arasynda boş jübüt bolmasyn (penjire), wagt boýunça (smenalar garyşsa hem);
     - günde iň az 2 jübüt bolsun: 1 jübütli gün güýçli jerimelenýär, boş gün az (ýük az bolsa
       käbir gün boş galyp biler, ýöne 1 jübütli günden gowy).
-    Topar haýsydyr bir sapakda bolsa (umumy ýa-da kiçi toparlaryň biri) şol wagt "eýelenen" hasaplanýar.
+    Kiçi topary bar toparda her kiçi toparyň güni aýratyn barlanýar (umumy sapaklar + öz sapaklary):
+    1-nji kiçi topar 1-nji jübütde, 2-nji kiçi topar 2-nji jübütde okasa, ikisinde hem penjire bar.
     """
-    busy = defaultdict(list)  # (topar, hepde, gün, wagt orny) -> sapak var-lary
+    timelines = defaultdict(list)  # okaýan (topar ýa-da kiçi topar) -> [(hepde, slot, var-lar)]
     for (g, w, sid), vs in by_group_slot.items():
-        busy[g, w, slot_by_id[sid].weekday, rank[sid]] += vs
+        for who in [("sg", sg) for sg in subgroups_of.get(g, [])] or [("g", g)]:
+            timelines[who].append((w, sid, vs))
     for (sg, w, sid), vs in by_subgroup_slot.items():
-        busy[group_of_subgroup[sg], w, slot_by_id[sid].weekday, rank[sid]] += vs
-    days = defaultdict(list)  # (topar, hepde, gün) -> [(wagt orny, eýelenen var)]
-    for (g, w, day, r), vs in busy.items():
-        occ = model.new_bool_var(f"busy_{g}_{w}_{day}_{r}")
+        timelines["sg", sg].append((w, sid, vs))
+    busy = defaultdict(list)  # (okaýan, hepde, gün, wagt orny) -> sapak var-lary
+    for who, items in timelines.items():
+        for w, sid, vs in items:
+            busy[who, w, slot_by_id[sid].weekday, rank[sid]] += vs
+    days = defaultdict(list)  # (okaýan, hepde, gün) -> [(wagt orny, eýelenen var)]
+    for (who, w, day, r), vs in busy.items():
+        occ = model.new_bool_var(f"busy_{who}_{w}_{day}_{r}")
         model.add_max_equality(occ, vs)
-        days[g, w, day].append((r, occ))
+        days[who, w, day].append((r, occ))
 
     penalties = []
     for key, items in days.items():
@@ -186,7 +192,7 @@ def _solve_times(inp: SolverInput, time_limit: float):
         for sg in subs:
             model.add_at_most_one(common + by_subgroup_slot.get((sg, w, sid), []))
 
-    penalties += _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, group_of_subgroup)
+    penalties += _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, inp.subgroups_of)
 
     # Mugallymyň günlük çägi.
     for (tid, _w, _day), vars_ in by_teacher_day.items():
