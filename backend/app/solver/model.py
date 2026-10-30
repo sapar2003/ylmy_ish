@@ -7,6 +7,7 @@ class Slot:
     weekday: int
     number: int
     shift_id: int
+    start: int = 0  # başlanýan wagty, minut (08:30 -> 510): dürli smenalaryň slotlaryny deňeşdirmek üçin
 
 
 @dataclass(frozen=True)

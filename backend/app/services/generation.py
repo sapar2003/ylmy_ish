@@ -107,7 +107,10 @@ def build_input(db: Session, time_limit_seconds: float, weeks: int = 1) -> tuple
     if not rooms:
         warnings.append("Otag ýok: ilki otaglary goşuň.")
     inp = sv.SolverInput(
-        slots=[sv.Slot(s.id, s.weekday, s.number, s.shift_id) for s in slots],
+        slots=[
+            sv.Slot(s.id, s.weekday, s.number, s.shift_id, start=s.starts_at.hour * 60 + s.starts_at.minute)
+            for s in slots
+        ],
         rooms=rooms, teachers=teachers, lessons=lessons, subgroups_of=dict(subgroups_of),
         time_limit_seconds=time_limit_seconds, weeks=weeks,
     )
