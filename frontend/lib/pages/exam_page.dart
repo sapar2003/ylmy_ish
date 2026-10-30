@@ -190,39 +190,55 @@ class _ExamPageState extends State<ExamPage> {
         Row(children: [
           const PageTitle(title: 'Synag raspisaniýesi', icon: Icons.fact_check, color: AppColors.exams),
           const SizedBox(width: 24),
-          DropdownButton<int>(
-            value: _session?['id'] as int?,
-            items: [
-              for (final s in _sessions)
-                DropdownMenuItem(
-                  value: s['id'] as int,
-                  child: Text('${s['name']} (${examKinds[s['kind']] ?? s['kind']})'),
-                ),
-            ],
-            onChanged: (id) {
-              setState(() {
-                _session = _sessions.firstWhere((s) => s['id'] == id);
-                _current = null;
-                _entries = [];
-              });
-              _loadSession();
-            },
-          ),
-          const SizedBox(width: 16),
-          if (_schedules.isNotEmpty)
-            DropdownButton<int>(
-              value: _current?['id'] as int?,
+          // Uzyn atlar sygar ýaly saýlawlar galan ýeri paýlaşýar we "..." bilen gysgalýar.
+          Expanded(
+            flex: 2,
+            child: DropdownButton<int>(
+              isExpanded: true,
+              value: _session?['id'] as int?,
               items: [
-                for (final t in _schedules)
-                  DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}  (${_statusText(t)})')),
+                for (final s in _sessions)
+                  DropdownMenuItem(
+                    value: s['id'] as int,
+                    child: Text(
+                      '${s['name']} (${examKinds[s['kind']] ?? s['kind']})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               ],
               onChanged: (id) {
-                setState(() => _current = _schedules.firstWhere((t) => t['id'] == id));
-                _watchCurrent();
-                _loadEntries();
+                setState(() {
+                  _session = _sessions.firstWhere((s) => s['id'] == id);
+                  _current = null;
+                  _entries = [];
+                });
+                _loadSession();
               },
             ),
-          const Spacer(),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 3,
+            child: _schedules.isEmpty
+                ? const SizedBox()
+                : DropdownButton<int>(
+                    isExpanded: true,
+                    value: _current?['id'] as int?,
+                    items: [
+                      for (final t in _schedules)
+                        DropdownMenuItem(
+                          value: t['id'] as int,
+                          child: Text('${t['name']}  (${_statusText(t)})', overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: (id) {
+                      setState(() => _current = _schedules.firstWhere((t) => t['id'] == id));
+                      _watchCurrent();
+                      _loadEntries();
+                    },
+                  ),
+          ),
+          const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: _session == null ? null : _generate,
             icon: const Icon(Icons.auto_awesome),
