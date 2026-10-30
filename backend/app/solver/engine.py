@@ -18,6 +18,9 @@ from app.solver.precheck import eligible_rooms, precheck, room_allowed, teacher_
 W_SAME_DAY = 30  # bir ders bir günde iki gezek
 W_PREFERRED = 5  # mugallymyň isleýän wagty (bonus)
 W_LATE = 1  # her sapak belgisi üçin: ir sapaklar gowy, gün gysga bolsun
+W_GAP = 50  # toparyň gününde sapaklaryň arasynda boş jübüt ("penjire")
+W_SINGLE_DAY = 40  # toparyň gününde diňe 1 jübüt
+W_EMPTY_DAY = 10  # toparyň sapaksyz güni (ýük azlygynda bolup biler, ýöne günlere paýlamak gowy)
 
 STATUS_NAMES = {
     cp_model.OPTIMAL: "optimal",
@@ -54,12 +57,61 @@ def weekly_count(inp: SolverInput, lesson) -> int:
     return lesson.per_week + (lesson.biweekly if inp.weeks == 1 else 0)
 
 
+def time_ranks(slots) -> dict[int, int]:
+    """slot id -> günüň içindäki wagt orny (1 = iň ir). Dürli smenalaryň bir wagtdaky slotlary
+    (meselem, irden 3-nji we öýlän 1-nji jübüt, ikisi hem 11:40) birmeňzeş orunda bolýar."""
+    key = {s.id: (s.start, 0) if s.start else (0, s.number) for s in slots}
+    order = sorted(set(key.values()))
+    return {sid: order.index(k) + 1 for sid, k in key.items()}
+
+
+def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, group_of_subgroup) -> list:
+    """Toparyň gününiň görnüşi üçin ýumşak çäklendirmeler:
+    - sapaklaryň arasynda boş jübüt bolmasyn (penjire), wagt boýunça (smenalar garyşsa hem);
+    - günde iň az 2 jübüt bolsun: 1 jübütli gün güýçli jerimelenýär, boş gün az (ýük az bolsa
+      käbir gün boş galyp biler, ýöne 1 jübütli günden gowy).
+    Topar haýsydyr bir sapakda bolsa (umumy ýa-da kiçi toparlaryň biri) şol wagt "eýelenen" hasaplanýar.
+    """
+    busy = defaultdict(list)  # (topar, hepde, gün, wagt orny) -> sapak var-lary
+    for (g, w, sid), vs in by_group_slot.items():
+        busy[g, w, slot_by_id[sid].weekday, rank[sid]] += vs
+    for (sg, w, sid), vs in by_subgroup_slot.items():
+        busy[group_of_subgroup[sg], w, slot_by_id[sid].weekday, rank[sid]] += vs
+    days = defaultdict(list)  # (topar, hepde, gün) -> [(wagt orny, eýelenen var)]
+    for (g, w, day, r), vs in busy.items():
+        occ = model.new_bool_var(f"busy_{g}_{w}_{day}_{r}")
+        model.add_max_equality(occ, vs)
+        days[g, w, day].append((r, occ))
+
+    penalties = []
+    for key, items in days.items():
+        items.sort(key=lambda t: t[0])
+        occ = [v for _, v in items]
+        any_lesson = model.new_bool_var(f"day_{key}")
+        model.add_max_equality(any_lesson, occ)
+        single = model.new_bool_var(f"single_{key}")
+        model.add(single >= 2 * any_lesson - sum(occ))  # diňe sapak sany 1 bolanda 1
+        empty = model.new_bool_var(f"empty_{key}")
+        model.add(empty >= 1 - any_lesson)
+        penalties += [W_SINGLE_DAY * single, W_EMPTY_DAY * empty]
+        for j in range(1, len(occ) - 1):  # j-nji jübüt boş, öňünde we yzynda sapak bar bolsa -> penjire
+            before = model.new_bool_var(f"before_{key}_{j}")
+            after = model.new_bool_var(f"after_{key}_{j}")
+            model.add_max_equality(before, occ[:j])
+            model.add_max_equality(after, occ[j + 1:])
+            gap = model.new_bool_var(f"gap_{key}_{j}")
+            model.add(gap >= before + after - occ[j] - 1)
+            penalties.append(W_GAP * gap)
+    return penalties
+
+
 def _solve_times(inp: SolverInput, time_limit: float):
     """Wagt tapgyry. Iki hepdelik raspisaniýede (inp.weeks == 2) her wagt "hepde + slot" jübüti:
     her hepde geçýän sapak (x) iki hepdäniň şol slotuny hem tutýar, iki hepdede birki (y) diňe bir hepdäňkini.
     """
     model = cp_model.CpModel()
     slot_by_id = {s.id: s for s in inp.slots}
+    rank = time_ranks(inp.slots)
     weeks = range(1, inp.weeks + 1)
     x: dict[tuple[int, int], cp_model.IntVar] = {}  # (sapak, slot) -> her hepde
     y: dict[tuple[int, int, int], cp_model.IntVar] = {}  # (sapak, hepde, slot) -> diňe şol hepde
@@ -85,7 +137,7 @@ def _solve_times(inp: SolverInput, time_limit: float):
                 x[i, sid] = v
                 own_x.append(v)
                 occupies += [(w, v) for w in weeks]
-                penalties.append(W_LATE * slot.number * v)
+                penalties.append(W_LATE * rank[sid] * v)
                 if sid in teacher.preferred:
                     penalties.append(-W_PREFERRED * v)
             for w in weeks if biweekly else ():
@@ -93,7 +145,7 @@ def _solve_times(inp: SolverInput, time_limit: float):
                 y[i, w, sid] = v
                 own_y[w].append(v)
                 occupies.append((w, v))
-                penalties.append(W_LATE * slot.number * v)
+                penalties.append(W_LATE * rank[sid] * v)
             for w, v in occupies:
                 by_slot[w, sid].append((i, v))
                 by_teacher_slot[lesson.teacher_id, w, sid].append(v)
@@ -133,6 +185,8 @@ def _solve_times(inp: SolverInput, time_limit: float):
             model.add_at_most_one(common)
         for sg in subs:
             model.add_at_most_one(common + by_subgroup_slot.get((sg, w, sid), []))
+
+    penalties += _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, group_of_subgroup)
 
     # Mugallymyň günlük çägi.
     for (tid, _w, _day), vars_ in by_teacher_day.items():

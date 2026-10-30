@@ -137,3 +137,40 @@ def test_two_week_cycle_biweekly_lessons_take_turns():
 def test_one_week_mode_counts_biweekly_as_weekly():
     r = solve(base_input([dataclasses.replace(lesson("a", 1, [1], 1), biweekly=1)]))
     assert r.ok and len(r.placements) == 2 and all(p.week is None for p in r.placements)
+
+
+def test_group_days_without_gaps_and_at_least_two_pairs():
+    # 6 dürli ders, 5 gün × 3 jübüt: günde 1 jübüt ýa-da arada boş jübüt bolmaly däl.
+    lessons = [lesson(f"s{k}", k + 1, [1], 1) for k in range(6)]
+    teachers = {k + 1: Teacher(k + 1, f"T{k}") for k in range(6)}
+    r = solve(base_input(lessons, teachers=teachers))
+    assert r.ok, r.issues
+    by_day = {}
+    for p in r.placements:
+        by_day.setdefault(p.slot_id // 10, []).append(p.slot_id % 10)
+    for day, nums in by_day.items():
+        assert len(nums) >= 2, (day, nums)
+        assert max(nums) - min(nums) + 1 == len(nums), (day, nums)
+
+
+def test_gaps_measured_by_clock_time_across_shifts():
+    # Irden: 08:30, 10:00, 11:40; öýlän: 11:40, 13:10, 14:40. Smenasyz topar ikisini hem ulanyp biler.
+    times = {1: [510, 600, 700], 2: [700, 790, 880]}
+    slots = [Slot(id=sh * 100 + d * 10 + n, weekday=d, number=n, shift_id=sh, start=times[sh][n - 1])
+             for sh in (1, 2) for d in range(1, 4) for n in range(1, 4)]
+    lessons = [Lesson(key=f"s{k}", curriculum_item_id=0, assignment_id=0, teacher_id=k + 1, group_ids=(1,),
+                      subgroup_id=None, per_week=1, size=20, room_type_id=None,
+                      allowed_slots=frozenset(s.id for s in slots)) for k in range(6)]
+    inp = dataclasses.replace(base_input(lessons, teachers={k + 1: Teacher(k + 1, f"T{k}") for k in range(6)}),
+                              slots=slots)
+    r = solve(inp)
+    assert r.ok, r.issues
+    start = {s.id: s.start for s in slots}
+    by_day = {}
+    for p in r.placements:
+        by_day.setdefault(p.slot_id % 100 // 10, set()).add(start[p.slot_id])
+    order = sorted({t for ts in times.values() for t in ts})
+    for day, ts in by_day.items():
+        idx = sorted(order.index(t) for t in ts)
+        assert idx[-1] - idx[0] + 1 == len(idx), (day, sorted(ts))
+        assert len(ts) >= 2, (day, ts)
