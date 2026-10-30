@@ -231,23 +231,37 @@ class _TimetablePageState extends State<TimetablePage> {
         Row(children: [
           const PageTitle(title: 'Raspisaniýe', icon: Icons.calendar_view_week, color: AppColors.schedule),
           const SizedBox(width: 24),
-          if (_timetables.isNotEmpty)
-            DropdownButton<int>(
-              value: _current?['id'] as int?,
-              items: [
-                for (final t in _timetables)
-                  DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}  (${_statusText(t)})')),
-              ],
-              onChanged: (id) {
-                setState(() {
-                  _current = _timetables.firstWhere((t) => t['id'] == id);
-                  _weekStart = null;
-                });
-                _watchCurrent();
-                _loadEntries();
-              },
-            ),
-          const Spacer(),
+          // Uzyn at sygar ýaly saýlaw galan ýeri alýar we "..." bilen gysgalýar.
+          Expanded(
+            child: _timetables.isEmpty
+                ? const SizedBox()
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: _current?['id'] as int?,
+                        items: [
+                          for (final t in _timetables)
+                            DropdownMenuItem(
+                              value: t['id'] as int,
+                              child: Text('${t['name']}  (${_statusText(t)})', overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                        onChanged: (id) {
+                          setState(() {
+                            _current = _timetables.firstWhere((t) => t['id'] == id);
+                            _weekStart = null;
+                          });
+                          _watchCurrent();
+                          _loadEntries();
+                        },
+                      ),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: _generate,
             icon: const Icon(Icons.auto_awesome),
