@@ -141,7 +141,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Iki hepdelik (1-nji / 2-nji hepde)'),
+                  title: const Text('Iki hepdelik (sanawjy / maýdalawjy hepde)'),
                   subtitle: const Text('"Iki hepdede bir" sapaklar diňe öz hepdesinde goýulýar'),
                   value: twoWeeks,
                   onChanged: (v) => setDialog(() => twoWeeks = v),
@@ -345,8 +345,8 @@ class _TimetablePageState extends State<TimetablePage> {
         padding: const EdgeInsets.only(top: 12),
         child: SegmentedButton<int>(
           segments: const [
-            ButtonSegment(value: 1, label: Text('1-nji hepde')),
-            ButtonSegment(value: 2, label: Text('2-nji hepde')),
+            ButtonSegment(value: 1, label: Text('Sanawjy hepde')),
+            ButtonSegment(value: 2, label: Text('Maýdalawjy hepde')),
           ],
           selected: {_week},
           onSelectionChanged: (s) {
@@ -374,7 +374,7 @@ class _TimetablePageState extends State<TimetablePage> {
         ),
         Text(
           '$n-nji hepde: ${_ddmm(week)} – ${_ddmm(week.add(const Duration(days: 6)))}.${week.year}'
-          '${twoWeeks ? '  ·  ${(n - 1) % 2 + 1}-nji hepdäniň raspisaniýesi' : ''}',
+          '${twoWeeks ? '  ·  ${weekNames[(n - 1) % 2 + 1]} hepde' : ''}',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         IconButton(
@@ -509,7 +509,7 @@ class _TimetablePageState extends State<TimetablePage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${e['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         Text(
-          '${lessonTypes[type] ?? type}${e['week'] != null ? ' · iki hepdede bir (${e['week']}-nji hepde)' : ''}',
+          '${lessonTypes[type] ?? type}${e['week'] != null ? ' · diňe ${weekNames[e['week']]!.toLowerCase()} hepde' : ''}',
           style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
         ),
         for (final l in lines) Text(l, style: const TextStyle(fontSize: 12)),

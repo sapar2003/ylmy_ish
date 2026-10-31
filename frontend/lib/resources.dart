@@ -49,6 +49,8 @@ enum FacultyVia { faculty, department }
 const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe', 'seminar': 'Seminar'};
 const levels = {'bachelor': 'Bakalawr', 'master': 'Magistr'};
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
+// Iki hepdelik raspisaniýäniň hepdeleri: 1 — sanawjy, 2 — maýdalawjy (ýarymýylyň ilkinji hepdesi sanawjy).
+const weekNames = {1: 'Sanawjy', 2: 'Maýdalawjy'};
 const examKinds = {
   'midterm': 'Ara synag',
   'final': 'Ýarymýyllyk synag',
