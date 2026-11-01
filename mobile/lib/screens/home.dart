@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../theme.dart';
 import 'login.dart';
 
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
+const weekdaysShort = ['Du', 'Si', 'Ça', 'Pe', 'An', 'Şe', 'Ýe'];
+const months = ['ýanwar', 'fewral', 'mart', 'aprel', 'maý', 'iýun', 'iýul', 'awgust', 'sentýabr', 'oktýabr', 'noýabr', 'dekabr'];
 const weekNames = {1: 'Sanawjy hepde', 2: 'Maýdalawjy hepde'};
 const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe', 'seminar': 'Seminar'};
-const typeColors = {
-  'lecture': Color(0xFF3949AB),
-  'practice': Color(0xFF8E24AA),
-  'lab': Color(0xFF00897B),
-  'seminar': Color(0xFFF4511E),
-};
 
-String ddmm(DateTime d) => '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
 String hhmm(String t) => t.substring(0, 5);
+String longDate(DateTime d) => '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
+DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,282 +24,249 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
+  String get _name => '${Api.instance.me?['teacher']?['name'] ?? Api.instance.me?['username'] ?? ''}';
+
+  /// "Gurbangylyçew Aman Öräýewiç" -> "Aman"; "Hudaýgulyýewa G." -> doly at.
+  String get _firstName {
+    final parts = _name.split(' ');
+    return parts.length > 1 && !parts[1].endsWith('.') ? parts[1] : _name;
+  }
+
+  void _profile() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: C.primarySoft,
+                child: Text(_name.isEmpty ? '?' : _name[0], style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700)),
+              ),
+              title: Text(_name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text('${Api.instance.me?['username'] ?? ''}'),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.key_outlined),
+              title: const Text('Paroly çalyş'),
+              onTap: () {
+                Navigator.pop(c);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: C.danger),
+              title: const Text('Çykmak', style: TextStyle(color: C.danger)),
+              onTap: () {
+                Navigator.pop(c);
+                Api.instance.logout();
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final me = Api.instance.me ?? {};
     return Scaffold(
-      appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Meniň raspisaniýäm', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          Text('${me['teacher']?['name'] ?? me['username'] ?? ''}', style: const TextStyle(fontSize: 13)),
-        ]),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v == 'password') {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
-              } else {
-                Api.instance.logout();
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'password', child: Text('Paroly çalyş')),
-              PopupMenuItem(value: 'logout', child: Text('Çykmak')),
-            ],
+      body: SafeArea(
+        bottom: false,
+        child: Column(children: [
+          Container(
+            color: C.surface,
+            padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Salam, $_firstName', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(longDate(DateTime.now()), style: const TextStyle(color: C.muted)),
+                ]),
+              ),
+              IconButton(
+                onPressed: _profile,
+                icon: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: C.primarySoft,
+                  child: Text(_name.isEmpty ? '?' : _name[0], style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ]),
           ),
-        ],
+          const Divider(),
+          Expanded(child: IndexedStack(index: _tab, children: const [ScheduleView(), ExamsView()])),
+        ]),
       ),
-      body: IndexedStack(index: _tab, children: const [DayView(), WeekView(), ExamsView()]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.today), label: 'Gün'),
-          NavigationDestination(icon: Icon(Icons.view_week), label: 'Hepde'),
-          NavigationDestination(icon: Icon(Icons.fact_check), label: 'Synaglar'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.border))),
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
+            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Hepdäniň maglumatyny ýükleýän umumy bölek (Gün we Hepde görnüşleri üçin).
-mixin WeekLoader<T extends StatefulWidget> on State<T> {
-  Map<String, dynamic>? week;
-  bool cached = false;
-  bool loading = true;
-  String? error;
+// ---------------------------------------------------------------------------------------------
+// Raspisaniýe: hepdäniň günleri (zolak) + saýlanan günüň sapaklary
+// ---------------------------------------------------------------------------------------------
 
-  Future<void> loadWeek(DateTime on) async {
+class ScheduleView extends StatefulWidget {
+  const ScheduleView({super.key});
+
+  @override
+  State<ScheduleView> createState() => _ScheduleViewState();
+}
+
+class _ScheduleViewState extends State<ScheduleView> {
+  DateTime _day = dayOnly(DateTime.now().weekday == 7 ? DateTime.now().add(const Duration(days: 1)) : DateTime.now());
+  Map<String, dynamic>? _week;
+  bool _cached = false;
+  bool _loading = true;
+  String? _error;
+
+  DateTime get _monday => mondayOf(_day);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
     setState(() {
-      loading = true;
-      error = null;
+      _loading = true;
+      _error = null;
     });
     try {
-      final r = await Api.instance.week(on);
+      final r = await Api.instance.week(_monday);
       if (!mounted) return;
       setState(() {
-        week = r.data;
-        cached = r.cached;
-        loading = false;
+        _week = r.data;
+        _cached = r.cached;
+        _loading = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        error = e.message;
-        loading = false;
+        _error = e.message;
+        _loading = false;
       });
     }
   }
 
-  List<Map<String, dynamic>> entriesOn(int weekday) {
-    final list = ((week?['entries'] as List?) ?? []).cast<Map<String, dynamic>>()
-        .where((e) => e['weekday'] == weekday)
-        .toList()
-      ..sort((a, b) => '${a['starts_at']}'.compareTo('${b['starts_at']}'));
-    return list;
+  void _select(DateTime d) {
+    final reload = mondayOf(d) != _monday;
+    setState(() => _day = d);
+    if (reload) _load();
   }
 
-  String weekLabel() {
-    final w = week?['week'];
-    return w == null ? '' : weekNames[w] ?? '';
-  }
-
-  Widget? statusBanner() {
-    if (error != null && week == null) {
-      return MessageBox(icon: Icons.wifi_off, text: error!, onRetry: null);
-    }
-    if (week != null && week!['timetable'] == null) {
-      return const MessageBox(icon: Icons.hourglass_empty,
-          text: 'Raspisaniýe heniz çap edilmedi. Okuw bölümi çap edenden soň şu ýerde görüner.');
-    }
-    return null;
-  }
-}
-
-class DayView extends StatefulWidget {
-  const DayView({super.key});
-
-  @override
-  State<DayView> createState() => _DayViewState();
-}
-
-class _DayViewState extends State<DayView> with WeekLoader {
-  DateTime _day = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    loadWeek(_day);
-  }
-
-  void _go(int days) {
-    final next = DateTime(_day.year, _day.month, _day.day + days);
-    final reload = mondayOf(next) != mondayOf(_day);
-    setState(() => _day = next);
-    if (reload) loadWeek(next);
-  }
+  List<Map<String, dynamic>> _lessons(int weekday) =>
+      ((_week?['entries'] as List?) ?? []).cast<Map<String, dynamic>>().where((e) => e['weekday'] == weekday).toList()
+        ..sort((a, b) => '${a['starts_at']}'.compareTo('${b['starts_at']}'));
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final isToday = isoDate(_day) == isoDate(today);
-    final lessons = entriesOn(_day.weekday);
-    final now = '${today.hour.toString().padLeft(2, '0')}:${today.minute.toString().padLeft(2, '0')}';
-    final next = isToday ? lessons.where((e) => hhmm(e['ends_at']).compareTo(now) > 0).firstOrNull : null;
-    final banner = statusBanner();
-    return RefreshIndicator(
-      onRefresh: () => loadWeek(_day),
-      child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-          child: Row(children: [
-            IconButton(onPressed: () => _go(-1), icon: const Icon(Icons.chevron_left)),
+    final today = dayOnly(DateTime.now());
+    final weekLabel = weekNames[_week?['week']];
+    final lessons = _lessons(_day.weekday);
+    final now = TimeOfDay.now();
+    final nowStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final isToday = _day == today;
+    final current = isToday
+        ? lessons.where((e) => hhmm(e['starts_at']).compareTo(nowStr) <= 0 && hhmm(e['ends_at']).compareTo(nowStr) > 0).firstOrNull
+        : null;
+    final next = isToday && current == null ? lessons.where((e) => hhmm(e['starts_at']).compareTo(nowStr) > 0).firstOrNull : null;
+
+    return Column(children: [
+      Container(
+        color: C.surface,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(children: [
+          Row(children: [
+            IconButton(onPressed: () => _select(_day.subtract(const Duration(days: 7))), icon: const Icon(Icons.chevron_left)),
             Expanded(
               child: Column(children: [
-                Text('${weekdays[_day.weekday - 1]}, ${ddmm(_day)}${isToday ? ' · şu gün' : ''}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                if (weekLabel().isNotEmpty) Text(weekLabel(), style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                Text('${_monday.day} ${months[_monday.month - 1]} – ${_monday.add(const Duration(days: 5)).day} '
+                    '${months[_monday.add(const Duration(days: 5)).month - 1]}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (weekLabel != null) ...[const SizedBox(height: 3), Tag(weekLabel, color: C.primary)],
               ]),
             ),
-            IconButton(onPressed: () => _go(1), icon: const Icon(Icons.chevron_right)),
+            IconButton(onPressed: () => _select(_day.add(const Duration(days: 7))), icon: const Icon(Icons.chevron_right)),
           ]),
-        ),
-        if (!isToday)
-          Center(child: TextButton(onPressed: () => _go(DateTime(today.year, today.month, today.day)
-              .difference(DateTime(_day.year, _day.month, _day.day)).inDays), child: const Text('Şu güne gaýt'))),
-        if (cached) const OfflineNote(),
-        if (loading && week == null)
-          const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-        else if (banner != null)
-          banner
-        else if (lessons.isEmpty)
-          const MessageBox(icon: Icons.free_breakfast_outlined, text: 'Bu gün sapagyňyz ýok.')
-        else
-          for (final e in lessons) LessonCard(entry: e, highlight: identical(e, next)),
-      ]),
-    );
-  }
-}
-
-class WeekView extends StatefulWidget {
-  const WeekView({super.key});
-
-  @override
-  State<WeekView> createState() => _WeekViewState();
-}
-
-class _WeekViewState extends State<WeekView> with WeekLoader {
-  DateTime _monday = mondayOf(DateTime.now());
-
-  @override
-  void initState() {
-    super.initState();
-    loadWeek(_monday);
-  }
-
-  void _go(int weeks) {
-    setState(() => _monday = DateTime(_monday.year, _monday.month, _monday.day + 7 * weeks));
-    loadWeek(_monday);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final banner = statusBanner();
-    final total = ((week?['entries'] as List?) ?? []).length;
-    return RefreshIndicator(
-      onRefresh: () => loadWeek(_monday),
-      child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-          child: Row(children: [
-            IconButton(onPressed: () => _go(-1), icon: const Icon(Icons.chevron_left)),
-            Expanded(
-              child: Column(children: [
-                Text('${ddmm(_monday)} – ${ddmm(_monday.add(const Duration(days: 6)))}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                Text([weekLabel(), if (week != null && banner == null) '$total sapak'].where((s) => s.isNotEmpty).join(' · '),
-                    style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-              ]),
-            ),
-            IconButton(onPressed: () => _go(1), icon: const Icon(Icons.chevron_right)),
+          const SizedBox(height: 8),
+          Row(children: [
+            for (var i = 0; i < 6; i++) Expanded(child: _dayChip(_monday.add(Duration(days: i)), today)),
           ]),
-        ),
-        if (cached) const OfflineNote(),
-        if (loading && week == null)
-          const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-        else if (banner != null)
-          banner
-        else
-          for (var d = 1; d <= 6; d++) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Text('${weekdays[d - 1]}, ${ddmm(_monday.add(Duration(days: d - 1)))}',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            ),
-            if (entriesOn(d).isEmpty)
-              const Padding(padding: EdgeInsets.fromLTRB(16, 2, 16, 4), child: Text('Sapak ýok', style: TextStyle(color: Colors.grey)))
-            else
-              for (final e in entriesOn(d)) LessonCard(entry: e),
-          ],
-      ]),
-    );
-  }
-}
-
-class LessonCard extends StatelessWidget {
-  const LessonCard({super.key, required this.entry, this.highlight = false});
-  final Map<String, dynamic> entry;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = '${entry['lesson_type']}';
-    final color = typeColors[type] ?? Colors.blueGrey;
-    final groups = entry['stream'] != null
-        ? '${entry['stream']['name']}'
-        : (entry['groups'] as List).map((g) => g['name']).join(', ');
-    final sub = entry['subgroup'] != null ? ' · ${entry['subgroup']['name']}-nji kiçi topar' : '';
-    final week = entry['week'] != null ? ' · diňe ${weekNames[entry['week']]!.toLowerCase()}' : '';
-    return Card(
-      elevation: highlight ? 3 : 0.5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: highlight ? BorderSide(color: color, width: 2) : BorderSide.none,
+        ]),
       ),
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Container(width: 5, decoration: BoxDecoration(color: color, borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-            child: SizedBox(
-              width: 52,
-              child: Column(children: [
-                Text(hhmm(entry['starts_at']), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                Text(hhmm(entry['ends_at']), style: const TextStyle(color: Colors.grey)),
-              ]),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 12, 12, 12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (highlight)
-                  Text('INDIKI SAPAK', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800)),
-                Text('${entry['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                Text('${lessonTypes[type] ?? type}$week', style: TextStyle(color: color, fontSize: 12.5)),
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.groups_outlined, size: 16),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text('$groups$sub')),
-                ]),
-                Row(children: [
-                  const Icon(Icons.meeting_room_outlined, size: 16),
-                  const SizedBox(width: 4),
-                  Text('Otag ${entry['room']?['name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                ]),
-              ]),
+      const Divider(),
+      Expanded(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: [
+            Row(children: [
+              Expanded(child: Text(longDate(_day), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+              if (_day != today && !(today.weekday == 7 && _day == today.add(const Duration(days: 1))))
+                TextButton(onPressed: () => _select(today.weekday == 7 ? today.add(const Duration(days: 1)) : today), child: const Text('Şu gün')),
+            ]),
+            if (_cached) const _OfflineNote(),
+            const SizedBox(height: 8),
+            if (_loading && _week == null)
+              const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+            else if (_error != null && _week == null)
+              EmptyView(icon: Icons.wifi_off, title: 'Birikip bolmady', text: _error)
+            else if (_week?['timetable'] == null)
+              const EmptyView(icon: Icons.hourglass_empty, title: 'Raspisaniýe heniz çap edilmedi',
+                  text: 'Okuw bölümi raspisaniýäni çap edenden soň şu ýerde görüner.')
+            else if (lessons.isEmpty)
+              const EmptyView(icon: Icons.free_breakfast_outlined, title: 'Sapak ýok', text: 'Bu gün sapagyňyz ýok.')
+            else
+              for (final e in lessons)
+                _LessonTile(entry: e, badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null)),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _dayChip(DateTime d, DateTime today) {
+    final selected = d == _day;
+    final isToday = d == today;
+    final has = _lessons(d.weekday).isNotEmpty;
+    return GestureDetector(
+      onTap: () => _select(d),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? C.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? C.primary : (isToday ? C.primary.withValues(alpha: 0.4) : Colors.transparent)),
+        ),
+        child: Column(children: [
+          Text(weekdaysShort[d.weekday - 1],
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: selected ? Colors.white70 : C.muted)),
+          const SizedBox(height: 4),
+          Text('${d.day}', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: selected ? Colors.white : C.text)),
+          const SizedBox(height: 4),
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: has ? (selected ? Colors.white : C.primary) : Colors.transparent,
             ),
           ),
         ]),
@@ -309,6 +274,87 @@ class LessonCard extends StatelessWidget {
     );
   }
 }
+
+class _LessonTile extends StatelessWidget {
+  const _LessonTile({required this.entry, this.badge});
+  final Map<String, dynamic> entry;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = '${entry['lesson_type']}';
+    final color = C.lesson(type);
+    final groups = entry['stream'] != null
+        ? '${entry['stream']['name']}'
+        : (entry['groups'] as List).map((g) => g['name']).join(', ');
+    final sub = entry['subgroup'] != null ? ' · ${entry['subgroup']['name']}-nji kiçi topar' : '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+          width: 52,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(hhmm(entry['starts_at']), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              Text(hhmm(entry['ends_at']), style: const TextStyle(color: C.subtle, fontSize: 13)),
+            ]),
+          ),
+        ),
+        Expanded(
+          child: Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: badge != null ? color : C.border, width: badge != null ? 1.5 : 1),
+            ),
+            child: IntrinsicHeight(
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Wrap(spacing: 6, runSpacing: 4, children: [
+                        Tag(lessonTypes[type] ?? type, color: color),
+                        if (entry['week'] != null) Tag('diňe ${weekNames[entry['week']]!.toLowerCase()}'),
+                        if (badge != null) Tag(badge!, color: C.success),
+                      ]),
+                      const SizedBox(height: 6),
+                      Text('${entry['subject']['name']}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, height: 1.3)),
+                      const SizedBox(height: 8),
+                      _info(Icons.meeting_room_outlined, 'Otag ${entry['room']?['name'] ?? '—'}', bold: true),
+                      const SizedBox(height: 3),
+                      _info(Icons.groups_outlined, '$groups$sub'),
+                    ]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+Widget _info(IconData icon, String text, {bool bold = false}) => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 16, color: C.muted),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(text, style: TextStyle(fontSize: 13.5, color: bold ? C.text : C.muted, fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
+      ),
+    ]);
+
+// ---------------------------------------------------------------------------------------------
+// Synaglar: gün boýunça toparlanan, geçenler aşakda
+// ---------------------------------------------------------------------------------------------
 
 class ExamsView extends StatefulWidget {
   const ExamsView({super.key});
@@ -345,50 +391,80 @@ class _ExamsViewState extends State<ExamsView> {
   @override
   Widget build(BuildContext context) {
     final today = isoDate(DateTime.now());
+    final upcoming = (_exams ?? []).where((x) => '${x['day']}'.compareTo(today) >= 0).toList();
+    final past = (_exams ?? []).where((x) => '${x['day']}'.compareTo(today) < 0).toList();
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 24), children: [
-        if (_cached) const OfflineNote(),
+      child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: [
+        if (_cached) const _OfflineNote(),
         if (_exams == null && _error == null)
-          const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
+          const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
         else if (_exams == null)
-          MessageBox(icon: Icons.wifi_off, text: _error!)
+          EmptyView(icon: Icons.wifi_off, title: 'Birikip bolmady', text: _error)
         else if (_exams!.isEmpty)
-          const MessageBox(icon: Icons.fact_check_outlined, text: 'Çap edilen synag raspisaniýesinde siziň synagyňyz ýok.')
-        else
-          for (final x in _exams!) ExamCard(exam: x, past: '${x['day']}'.compareTo(today) < 0),
+          const EmptyView(icon: Icons.assignment_outlined, title: 'Synag ýok',
+              text: 'Çap edilen synag raspisaniýesinde siziň synagyňyz ýok.')
+        else ...[
+          if (upcoming.isNotEmpty) ..._grouped(upcoming, false) else
+            const EmptyView(icon: Icons.task_alt, title: 'Ähli synaglar geçdi'),
+          if (past.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(4, 20, 4, 8),
+              child: Text('GEÇEN SYNAGLAR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.subtle, letterSpacing: 0.5)),
+            ),
+            ..._grouped(past, true),
+          ],
+        ],
       ]),
     );
   }
+
+  List<Widget> _grouped(List<Map<String, dynamic>> exams, bool past) {
+    final out = <Widget>[];
+    String? day;
+    for (final x in exams) {
+      if (x['day'] != day) {
+        day = '${x['day']}';
+        out.add(Padding(
+          padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+          child: Text(longDate(DateTime.parse(day)), style: const TextStyle(fontWeight: FontWeight.w700)),
+        ));
+      }
+      out.add(Opacity(opacity: past ? 0.55 : 1, child: _ExamTile(exam: x)));
+    }
+    return out;
+  }
 }
 
-class ExamCard extends StatelessWidget {
-  const ExamCard({super.key, required this.exam, required this.past});
+class _ExamTile extends StatelessWidget {
+  const _ExamTile({required this.exam});
   final Map<String, dynamic> exam;
-  final bool past;
 
   @override
   Widget build(BuildContext context) {
-    final day = DateTime.parse('${exam['day']}');
     final examiner = exam['role'] == 'examiner';
-    final color = examiner ? const Color(0xFFD81B60) : const Color(0xFF5E35B1);
-    return Opacity(
-      opacity: past ? 0.5 : 1,
+    final groups = (exam['groups'] as List).map((g) => g['name']).join(', ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
       child: Card(
-        elevation: 0.5,
-        child: ListTile(
-          contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          leading: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(ddmm(day), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            Text(weekdays[day.weekday - 1].substring(0, 3), style: const TextStyle(color: Colors.grey)),
-          ]),
-          title: Text('${exam['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${exam['starts_at']}–${exam['ends_at']} · ${(exam['groups'] as List).map((g) => g['name']).join(', ')}'),
-            Text('Otag ${exam['room']?['name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text('${examiner ? 'Siz — uly mugallym' : 'Siz — kiçi mugallym'}'
-                '${exam['partner'] != null ? ' · bilen: ${exam['partner']['name']}' : ''}', style: TextStyle(color: color)),
-            Text('${exam['session']['name']}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text('${exam['starts_at']}–${exam['ends_at']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Tag(examiner ? 'Uly mugallym' : 'Kiçi mugallym', color: examiner ? C.primary : const Color(0xFF7A5AF8)),
+            ]),
+            const SizedBox(height: 8),
+            Text('${exam['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, height: 1.3)),
+            const SizedBox(height: 8),
+            _info(Icons.meeting_room_outlined, 'Otag ${exam['room']?['name'] ?? '—'}', bold: true),
+            const SizedBox(height: 3),
+            _info(Icons.groups_outlined, groups),
+            if (exam['partner'] != null) ...[
+              const SizedBox(height: 3),
+              _info(Icons.person_outline, '${examiner ? 'Kiçi mugallym' : 'Uly mugallym'}: ${exam['partner']['name']}'),
+            ],
           ]),
         ),
       ),
@@ -396,35 +472,18 @@ class ExamCard extends StatelessWidget {
   }
 }
 
-class OfflineNote extends StatelessWidget {
-  const OfflineNote({super.key});
+class _OfflineNote extends StatelessWidget {
+  const _OfflineNote();
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        margin: const EdgeInsets.only(top: 8, bottom: 4),
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: const Color(0xFFFFFAEB), borderRadius: BorderRadius.circular(10)),
         child: const Row(children: [
-          Icon(Icons.cloud_off, size: 18),
+          Icon(Icons.cloud_off, size: 18, color: C.warning),
           SizedBox(width: 8),
-          Expanded(child: Text('Serwere birikip bolmady — soňky ýüklenen raspisaniýe görkezilýär.')),
-        ]),
-      );
-}
-
-class MessageBox extends StatelessWidget {
-  const MessageBox({super.key, required this.icon, required this.text, this.onRetry});
-  final IconData icon;
-  final String text;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(children: [
-          Icon(icon, size: 48, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center),
+          Expanded(child: Text('Internet ýok — soňky ýüklenen maglumat görkezilýär.', style: TextStyle(fontSize: 13))),
         ]),
       );
 }

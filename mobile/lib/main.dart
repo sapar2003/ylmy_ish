@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.white,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
   await Api.instance.init();
   runApp(const MugallymApp());
 }
@@ -17,13 +25,9 @@ class MugallymApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Raspisaniýe — mugallym',
+      title: 'Raspisaniýe',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF3949AB),
-        useMaterial3: true,
-        cardTheme: const CardThemeData(margin: EdgeInsets.symmetric(horizontal: 12, vertical: 5)),
-      ),
+      theme: appTheme(),
       home: ValueListenableBuilder<bool>(
         valueListenable: Api.instance.loggedIn,
         builder: (_, loggedIn, _) => loggedIn ? const HomeScreen() : const LoginScreen(),
