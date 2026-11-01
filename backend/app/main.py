@@ -23,5 +23,9 @@ def health() -> dict[str, str]:
 
 
 # Flutter web build bar bolsa, şol bir serwerden berilýär (API we UI bir salgyda).
+# Mugallym app-ynyň web görnüşi (telefonda brauzerden açmak üçin): /m/
+if settings.mobile_dir and Path(settings.mobile_dir).is_dir():
+    app.mount("/m", StaticFiles(directory=settings.mobile_dir, html=True), name="mobile")
+
 if settings.static_dir and Path(settings.static_dir).is_dir():
     app.mount("/", StaticFiles(directory=settings.static_dir, html=True), name="ui")

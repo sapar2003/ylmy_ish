@@ -557,3 +557,37 @@ class _GenerateSlotsDialogState extends State<GenerateSlotsDialog> {
     );
   }
 }
+
+/// "Mugallymlara çap et": mugallymlar telefon programmasynda diňe çap edilen raspisaniýäni görýär.
+class PublishButton extends StatelessWidget {
+  const PublishButton({super.key, required this.path, required this.published, required this.onChanged});
+  final String path; // meselem 'timetables/5/publish'
+  final bool published;
+  final ValueChanged<bool> onChanged;
+
+  Future<void> _toggle(BuildContext context) async {
+    final text = published
+        ? 'Mugallymlar bu raspisaniýäni mundan beýläk görmez. Çap etmegi ýatyrylsynmy?'
+        : 'Bu raspisaniýe mugallymlaryň telefonynda görüner (öňki çap edilen ýerine). Çap edilsinmi?';
+    if (!await confirm(context, text)) return;
+    try {
+      await Api.instance.post(path, {'published': !published});
+      onChanged(!published);
+    } on ApiException catch (e) {
+      if (context.mounted) showError(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => published
+      ? FilledButton.tonalIcon(
+          onPressed: () => _toggle(context),
+          icon: const Icon(Icons.check_circle, color: Colors.green),
+          label: const Text('Mugallymlara çap edildi'),
+        )
+      : OutlinedButton.icon(
+          onPressed: () => _toggle(context),
+          icon: const Icon(Icons.phone_android),
+          label: const Text('Mugallymlara çap et'),
+        );
+}

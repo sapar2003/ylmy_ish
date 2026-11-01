@@ -1,0 +1,170 @@
+"""Giriş, hasaplar (admin) we mugallymyň öz raspisaniýesi (mobil app üçin)."""
+from datetime import date, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+
+from app import models as m
+from app.api.auth import CurrentUser, TeacherUser, require_admin
+from app.api.crud import DbSession, get_or_404
+from app.api.v1.exams import list_entries as exam_entries
+from app.api.v1.timetables import list_entries as timetable_entries
+from app.api.v1.timetables import week_of
+from app.core.security import create_token, hash_password, verify_password
+from app.schemas import user as s
+from app.schemas.timetable import Ref
+from app.services.accounts import create_teacher_accounts, reset_password
+
+router = APIRouter()
+
+
+def _me(db, user: m.User) -> s.MeRead:
+    teacher = db.get(m.Teacher, user.teacher_id) if user.teacher_id else None
+    return s.MeRead(id=user.id, username=user.username, role=user.role, must_change_password=user.must_change_password,
+                    teacher=Ref(id=teacher.id, name=teacher.name) if teacher else None)
+
+
+# --- giriş ---
+auth = APIRouter(prefix="/auth", tags=["Giriş"])
+
+
+@auth.post("/login", response_model=s.LoginOut)
+def login(payload: s.LoginIn, db: DbSession):
+    user = db.scalar(select(m.User).where(m.User.username == payload.username.strip().lower()))
+    if user is None or not user.active or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login ýa-da parol nädogry.")
+    return s.LoginOut(**_me(db, user).model_dump(), token=create_token(user.id))
+
+
+@auth.get("/me", response_model=s.MeRead)
+def me(user: CurrentUser, db: DbSession):
+    return _me(db, user)
+
+
+@auth.post("/change-password", response_model=s.MeRead)
+def change_password(payload: s.ChangePasswordIn, user: CurrentUser, db: DbSession):
+    if not verify_password(payload.old_password, user.password_hash):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Häzirki parol nädogry.")
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = False
+    db.commit()
+    return _me(db, user)
+
+
+router.include_router(auth)
+
+# --- hasaplar (admin) ---
+users = APIRouter(prefix="/users", tags=["Hasaplar"], dependencies=[Depends(require_admin)])
+
+
+def _user_read(user: m.User, teachers: dict[int, m.Teacher]) -> s.UserRead:
+    t = teachers.get(user.teacher_id) if user.teacher_id else None
+    return s.UserRead(id=user.id, username=user.username, role=user.role, active=user.active,
+                      must_change_password=user.must_change_password,
+                      teacher=Ref(id=t.id, name=t.name) if t else None)
+
+
+@users.get("", response_model=list[s.UserRead])
+def list_users(db: DbSession):
+    teachers = {t.id: t for t in db.scalars(select(m.Teacher))}
+    return [_user_read(u, teachers) for u in db.scalars(select(m.User).order_by(m.User.role, m.User.username))]
+
+
+@users.post("/teachers", response_model=list[s.IssuedPassword], status_code=status.HTTP_201_CREATED)
+def create_teacher_users(payload: s.TeacherAccountsIn, db: DbSession):
+    """Mugallymlara hasap açýar. Wagtlaýyn parollar diňe şu jogapda görkezilýär — çap edip paýlaň."""
+    teachers = {t.id: t for t in db.scalars(select(m.Teacher))}
+    return [
+        s.IssuedPassword(user_id=u.id, username=u.username, password=pw,
+                         teacher=Ref(id=u.teacher_id, name=teachers[u.teacher_id].name))
+        for u, pw in create_teacher_accounts(db, payload.teacher_ids)
+    ]
+
+
+@users.post("/{user_id}/reset-password", response_model=s.IssuedPassword)
+def reset_user_password(user_id: int, db: DbSession):
+    user = get_or_404(db, m.User, user_id, "Ulanyjy")
+    t = db.get(m.Teacher, user.teacher_id) if user.teacher_id else None
+    return s.IssuedPassword(user_id=user.id, username=user.username, password=reset_password(db, user),
+                            teacher=Ref(id=t.id, name=t.name) if t else None)
+
+
+@users.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: int, db: DbSession, admin: m.User = Depends(require_admin)):
+    user = get_or_404(db, m.User, user_id, "Ulanyjy")
+    if user.id == admin.id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Öz hasabyňyzy aýryp bilmersiňiz.")
+    db.delete(user)
+    db.commit()
+
+
+router.include_router(users)
+
+# --- çap etmek (admin): mugallymlar diňe çap edilen raspisaniýäni görýär ---
+publish = APIRouter(tags=["Çap etmek"], dependencies=[Depends(require_admin)])
+
+
+@publish.post("/timetables/{timetable_id}/publish")
+def publish_timetable(timetable_id: int, payload: s.PublishIn, db: DbSession):
+    tt = get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe")
+    if payload.published and tt.status != m.TimetableStatus.done:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Diňe taýýar raspisaniýäni çap edip bolýar.")
+    if payload.published:
+        for other in db.scalars(select(m.Timetable).where(m.Timetable.published.is_(True))):
+            other.published = False
+    tt.published = payload.published
+    db.commit()
+    return {"id": tt.id, "published": tt.published}
+
+
+@publish.post("/exam-schedules/{schedule_id}/publish")
+def publish_exam_schedule(schedule_id: int, payload: s.PublishIn, db: DbSession):
+    sch = get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
+    if payload.published and sch.status != m.TimetableStatus.done:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Diňe taýýar synag raspisaniýesini çap edip bolýar.")
+    if payload.published:  # şol möwsümiň beýleki wersiýalary ýapylýar
+        for other in db.scalars(select(m.ExamSchedule).where(m.ExamSchedule.session_id == sch.session_id,
+                                                             m.ExamSchedule.published.is_(True))):
+            other.published = False
+    sch.published = payload.published
+    db.commit()
+    return {"id": sch.id, "published": sch.published}
+
+
+router.include_router(publish)
+
+# --- mugallymyň öz raspisaniýesi (mobil app) ---
+me_router = APIRouter(prefix="/me", tags=["Meniň raspisaniýäm"])
+
+
+@me_router.get("/timetable", response_model=s.MyWeekRead)
+def my_timetable(user: TeacherUser, db: DbSession, on: date | None = None):
+    """Çap edilen raspisaniýeden diňe şu mugallymyň sapaklary; `on` senäniň hepdesi (sanawjy/maýdalawjy)."""
+    tt = db.scalar(select(m.Timetable).where(m.Timetable.published.is_(True)))
+    if tt is None:
+        return s.MyWeekRead(timetable=None)
+    on = on or date.today()
+    week = week_of(tt, on)
+    entries = timetable_entries(tt.id, db, group_id=None, teacher_id=user.teacher_id, room_id=None, week=week, on=None)
+    return s.MyWeekRead(timetable=Ref(id=tt.id, name=tt.name), weeks=tt.weeks, week=week,
+                        week_start=on - timedelta(days=on.weekday()), entries=entries)
+
+
+@me_router.get("/exams", response_model=list[s.MyExamRead])
+def my_exams(user: TeacherUser, db: DbSession):
+    """Çap edilen synag raspisaniýelerinden şu mugallymyň uly ýa-da kiçi mugallym bolan synaglary."""
+    out = []
+    for sch in db.scalars(select(m.ExamSchedule).where(m.ExamSchedule.published.is_(True))):
+        session = db.get(m.ExamSession, sch.session_id)
+        for e in exam_entries(sch.id, db, group_id=None, teacher_id=user.teacher_id, room_id=None):
+            examiner = e.examiner.id == user.teacher_id
+            out.append(s.MyExamRead(
+                schedule=Ref(id=sch.id, name=sch.name), session=Ref(id=session.id, name=session.name),
+                kind=session.kind.value, day=e.day, starts_at=e.starts_at.strftime("%H:%M"),
+                ends_at=e.ends_at.strftime("%H:%M"), subject=e.subject, role="examiner" if examiner else "assistant",
+                groups=e.groups, room=e.room, partner=e.assistant if examiner else e.examiner,
+            ))
+    return sorted(out, key=lambda x: (x.day, x.starts_at))
+
+
+router.include_router(me_router)

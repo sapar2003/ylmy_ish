@@ -35,6 +35,7 @@ class TimetableRead(BaseModel):
     weeks: int
     starts_on: date | None
     ends_on: date | None
+    published: bool = False
 
 
 class Ref(BaseModel):

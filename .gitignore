@@ -6,3 +6,5 @@ __pycache__/
 .pytest_cache/
 build/
 .dart_tool/
+.secret_key
+hasaplar*.csv

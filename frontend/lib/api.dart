@@ -1,15 +1,19 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:web/web.dart' as web;
 
 /// Backend-iň salgysy. Web-de UI we API bir serwerden berilýär, şonuň üçin
 /// adaty ýagdaýda sahypanyň öz salgysy ulanylýar. Başga salgy üçin:
 /// `flutter run --dart-define=API_URL=http://localhost:8000`.
 const _apiUrlOverride = String.fromEnvironment('API_URL');
+const _tokenKey = 'raspisaniye_admin_token';
 
 class ApiException implements Exception {
-  ApiException(this.message);
+  ApiException(this.message, [this.status]);
   final String message;
+  final int? status;
   @override
   String toString() => message;
 }
@@ -17,6 +21,27 @@ class ApiException implements Exception {
 class Api {
   Api._();
   static final Api instance = Api._();
+
+  /// Giriş tokeni brauzeriň ýadynda saklanýar (sahypa täzelense hem galýar).
+  /// Token ýok ýa-da möhleti geçen bolsa `loggedIn` false bolýar we giriş sahypasy görünýär.
+  final ValueNotifier<bool> loggedIn = ValueNotifier(_readToken() != null);
+  String? _token = _readToken();
+
+  static String? _readToken() {
+    try {
+      return web.window.localStorage.getItem(_tokenKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void setToken(String? token) {
+    _token = token;
+    try {
+      token == null ? web.window.localStorage.removeItem(_tokenKey) : web.window.localStorage.setItem(_tokenKey, token);
+    } catch (_) {}
+    loggedIn.value = token != null;
+  }
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final base = _apiUrlOverride.isNotEmpty ? Uri.parse(_apiUrlOverride) : Uri.base;
@@ -27,10 +52,19 @@ class Api {
     );
   }
 
-  /// Brauzerde açmak/ýüklemek üçin doly salgy. Sanaw bahalary gaýtalanýan parametr bolýar (?page=1,2&page=3).
+  /// Brauzerde açmak/ýüklemek üçin doly salgy (token hem goşulýar, sebäbi brauzer sözbaşy ibermeýär).
+  /// Sanaw bahalary gaýtalanýan parametr bolýar (?page=1,2&page=3).
   Uri url(String path, Map<String, dynamic> query) => _uri(path).replace(
-        queryParameters: query.map((k, v) => MapEntry(k, v is Iterable ? v.map((x) => '$x') : '$v')),
+        queryParameters: {
+          ...query.map((k, v) => MapEntry(k, v is Iterable ? v.map((x) => '$x') : '$v')),
+          'token': ?_token,
+        },
       );
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      };
 
   Future<dynamic> _send(Future<http.Response> request) async {
     final http.Response res;
@@ -40,7 +74,8 @@ class Api {
       throw ApiException('Serwere birikip bolmady: $e');
     }
     final body = res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
-    if (res.statusCode >= 400) throw ApiException(_detail(body) ?? 'Ýalňyşlyk ${res.statusCode}');
+    if (res.statusCode == 401 && _token != null) setToken(null); // möhleti geçdi: täzeden giriň
+    if (res.statusCode >= 400) throw ApiException(_detail(body) ?? 'Ýalňyşlyk ${res.statusCode}', res.statusCode);
     return body;
   }
 
@@ -57,9 +92,8 @@ class Api {
     return null;
   }
 
-  static const _json = {'Content-Type': 'application/json'};
-
-  Future<dynamic> get(String path, [Map<String, dynamic>? query]) => _send(http.get(_uri(path, query)));
+  Future<dynamic> get(String path, [Map<String, dynamic>? query]) =>
+      _send(http.get(_uri(path, query), headers: _headers));
 
   /// Sanaw endpointleri `{items, total}` gaýtarýar; bu diňe `items`-i alýar.
   Future<List<Map<String, dynamic>>> list(String path, [Map<String, dynamic>? query]) async {
@@ -69,13 +103,13 @@ class Api {
   }
 
   Future<dynamic> post(String path, Object data) =>
-      _send(http.post(_uri(path), headers: _json, body: jsonEncode(data)));
+      _send(http.post(_uri(path), headers: _headers, body: jsonEncode(data)));
 
   Future<dynamic> put(String path, Object data) =>
-      _send(http.put(_uri(path), headers: _json, body: jsonEncode(data)));
+      _send(http.put(_uri(path), headers: _headers, body: jsonEncode(data)));
 
   Future<dynamic> patch(String path, Object data) =>
-      _send(http.patch(_uri(path), headers: _json, body: jsonEncode(data)));
+      _send(http.patch(_uri(path), headers: _headers, body: jsonEncode(data)));
 
-  Future<void> delete(String path) => _send(http.delete(_uri(path)));
+  Future<void> delete(String path) => _send(http.delete(_uri(path), headers: _headers));
 }

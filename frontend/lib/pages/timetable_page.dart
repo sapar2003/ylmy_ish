@@ -263,6 +263,19 @@ class _TimetablePageState extends State<TimetablePage> {
                   ),
           ),
           const SizedBox(width: 16),
+          if (_current?['status'] == 'done') ...[
+            PublishButton(
+              path: 'timetables/${_current!['id']}/publish',
+              published: _current!['published'] == true,
+              onChanged: (v) => setState(() {
+                _timetables = [
+                  for (final t in _timetables) {...t, 'published': t['id'] == _current!['id'] ? v : (v ? false : t['published'])},
+                ];
+                _current = _timetables.firstWhere((t) => t['id'] == _current!['id']);
+              }),
+            ),
+            const SizedBox(width: 8),
+          ],
           OutlinedButton.icon(
             onPressed: _current?['status'] == 'done'
                 ? () => showDialog(

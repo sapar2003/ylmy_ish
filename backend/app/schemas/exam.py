@@ -120,6 +120,7 @@ class ExamScheduleRead(BaseModel):
     seconds: float | None
     created_at: datetime
     entry_count: int = 0
+    published: bool = False
 
 
 class ExamEntryRead(BaseModel):
