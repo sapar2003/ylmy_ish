@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app import models as m
 from app.api.crud import build_crud_router
-from app.api.v1 import curriculum, exams, resources, timetables
+from app.api.v1 import curriculum, docx, exams, resources, timetables
 from app.schemas import structure as s
 
 api_router = APIRouter(prefix="/api/v1")
@@ -35,3 +35,4 @@ api_router.include_router(resources.router)
 api_router.include_router(curriculum.router)
 api_router.include_router(timetables.router)
 api_router.include_router(exams.router)
+api_router.include_router(docx.router)

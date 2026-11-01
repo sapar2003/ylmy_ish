@@ -103,3 +103,24 @@ def test_two_week_timetable_with_semester_dates(client):
     assert any(e["week"] == w for e in (on_first if w == 1 else on_second))
     assert not any(e["week"] == w for e in (on_second if w == 1 else on_first))
     assert client.get(f"{url}?on=2026-09-15").json() == on_first
+
+
+def test_timetable_word_download(client):
+    import io
+    import zipfile
+
+    seeded(client)
+    r = client.post("/api/v1/timetables", json={"name": "Word", "time_limit_seconds": 20, "weeks": 2,
+                                                "starts_on": "2026-09-01"})
+    tid = r.json()["id"]
+    groups = client.get("/api/v1/groups").json()["items"]
+    page1 = ",".join(str(g["id"]) for g in groups[:2])
+    r = client.get(f"/api/v1/timetables/{tid}/docx?page={page1}&page={groups[2]['id']}&dean=Test Dekan")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("application/vnd.openxmlformats")
+    doc = zipfile.ZipFile(io.BytesIO(r.content)).read("word/document.xml").decode()
+    assert "OKUW SAPAKLARYNYŇ" in doc and "Test Dekan" in doc
+    assert all(g["name"] in doc for g in groups[:3])
+    assert doc.count("<w:tbl>") == 4  # 2 sahypa × (sözbaşy + raspisaniýe)
+    assert 'w:val="btLr"' in doc  # günler dik ýazylýar
+    assert client.get(f"/api/v1/timetables/{tid}/docx?page=").status_code == 422

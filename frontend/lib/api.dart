@@ -27,6 +27,11 @@ class Api {
     );
   }
 
+  /// Brauzerde açmak/ýüklemek üçin doly salgy. Sanaw bahalary gaýtalanýan parametr bolýar (?page=1,2&page=3).
+  Uri url(String path, Map<String, dynamic> query) => _uri(path).replace(
+        queryParameters: query.map((k, v) => MapEntry(k, v is Iterable ? v.map((x) => '$x') : '$v')),
+      );
+
   Future<dynamic> _send(Future<http.Response> request) async {
     final http.Response res;
     try {

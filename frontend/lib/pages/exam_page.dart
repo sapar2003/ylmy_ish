@@ -7,6 +7,7 @@ import '../faculties.dart';
 import '../resources.dart';
 import '../theme.dart';
 import 'dialogs.dart';
+import 'word_dialog.dart';
 import 'timetable_page.dart' show ViewBy;
 
 /// Synag raspisaniýesini düzmek we görmek: setirler synag günleri, sütünler synag wagtlary.
@@ -239,6 +240,20 @@ class _ExamPageState extends State<ExamPage> {
                   ),
           ),
           const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: _current?['status'] == 'done'
+                ? () => showDialog(
+                      context: context,
+                      builder: (_) => WordDialog(
+                        endpoint: 'exam-schedules/${_current!['id']}/docx',
+                        title: 'Synag raspisaniýesini Word görnüşinde ýüklemek',
+                      ),
+                    )
+                : null,
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('Word'),
+          ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _session == null ? null : _generate,
             icon: const Icon(Icons.auto_awesome),
