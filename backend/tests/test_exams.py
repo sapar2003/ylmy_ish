@@ -108,3 +108,18 @@ def test_exam_schedule_api(client):
     assert all((b - a).days >= 2 for a, b in zip(days, days[1:]))
     assert all(e["room"]["name"] == "101" and e["assistant"]["name"] == "Kiçi" for e in entries)
     assert all(e["weekday"] != 7 for e in entries)
+
+
+def test_exam_word_download(client):
+    import io
+    import zipfile
+
+    test_exam_schedule_api(client)
+    sch = client.get("/api/v1/exam-schedules").json()[0]
+    gid = client.get("/api/v1/groups").json()["items"][0]["id"]
+    r = client.get(f"/api/v1/exam-schedules/{sch['id']}/docx?page={gid}&mini=true")
+    assert r.status_code == 200, r.text
+    doc = zipfile.ZipFile(io.BytesIO(r.content)).read("word/document.xml").decode()
+    assert "ARA" in doc and "TERTIBI" in doc
+    assert "b a ş l a n ý a n" in doc and "t a m a m l a n ý a n" in doc
+    assert "Synag 09" in doc and 'w:val="superscript"' in doc

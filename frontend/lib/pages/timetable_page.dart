@@ -7,6 +7,7 @@ import '../faculties.dart';
 import '../resources.dart';
 import '../theme.dart';
 import 'dialogs.dart';
+import 'word_dialog.dart';
 
 enum ViewBy { group, teacher, room }
 
@@ -262,6 +263,20 @@ class _TimetablePageState extends State<TimetablePage> {
                   ),
           ),
           const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: _current?['status'] == 'done'
+                ? () => showDialog(
+                      context: context,
+                      builder: (_) => WordDialog(
+                        endpoint: 'timetables/${_current!['id']}/docx',
+                        title: 'Raspisaniýäni Word görnüşinde ýüklemek',
+                      ),
+                    )
+                : null,
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('Word'),
+          ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _generate,
             icon: const Icon(Icons.auto_awesome),
