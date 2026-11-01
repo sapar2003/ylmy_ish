@@ -119,6 +119,30 @@ class Api {
     final r = await _cached('me/exams');
     return (data: (r.data as List).cast<Map<String, dynamic>>(), cached: r.cached);
   }
+
+  // --- bahalar ---
+  /// Sapagyň talyplary we şol günüň bahalary (`editable` — baha goýup bolýarmy).
+  Future<Map<String, dynamic>> lesson(int entryId, DateTime day) async =>
+      await _send(http.get(_uri('me/lesson', {'entry_id': '$entryId', 'day': isoDate(day)}), headers: _headers))
+          as Map<String, dynamic>;
+
+  /// `marks`: talybyň id-si → baha ("5", "4", "3", "2", "gm") ýa-da null (aýyrmak).
+  Future<Map<String, dynamic>> saveLesson(int entryId, DateTime day, Map<int, String?> marks) async =>
+      await _send(http.put(_uri('me/lesson'), headers: _headers, body: jsonEncode({
+        'entry_id': entryId,
+        'day': isoDate(day),
+        'marks': [for (final e in marks.entries) {'student_id': e.key, 'value': e.value}],
+      }))) as Map<String, dynamic>;
+
+  Future<({List<Map<String, dynamic>> data, bool cached})> courses() async {
+    final r = await _cached('me/courses');
+    return (data: (r.data as List).cast<Map<String, dynamic>>(), cached: r.cached);
+  }
+
+  Future<({Map<String, dynamic> data, bool cached})> journal(int assignmentId) async {
+    final r = await _cached('me/journal/$assignmentId');
+    return (data: r.data as Map<String, dynamic>, cached: r.cached);
+  }
 }
 
 String isoDate(DateTime d) =>

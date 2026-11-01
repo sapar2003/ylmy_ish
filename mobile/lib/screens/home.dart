@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'journal.dart';
 import 'login.dart';
 
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
@@ -99,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ]),
           ),
           const Divider(),
-          Expanded(child: IndexedStack(index: _tab, children: const [ScheduleView(), ExamsView()])),
+          Expanded(child: IndexedStack(index: _tab, children: const [ScheduleView(), JournalView(), ExamsView()])),
         ]),
       ),
       bottomNavigationBar: Container(
@@ -109,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onDestinationSelected: (i) => setState(() => _tab = i),
           destinations: const [
             NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
+            NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
             NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
           ],
         ),
@@ -234,7 +236,7 @@ class _ScheduleViewState extends State<ScheduleView> {
               const EmptyView(icon: Icons.free_breakfast_outlined, title: 'Sapak ýok', text: 'Bu gün sapagyňyz ýok.')
             else
               for (final e in lessons)
-                _LessonTile(entry: e, badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null)),
+                _LessonTile(entry: e, day: _day, badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null)),
           ]),
         ),
       ),
@@ -276,8 +278,9 @@ class _ScheduleViewState extends State<ScheduleView> {
 }
 
 class _LessonTile extends StatelessWidget {
-  const _LessonTile({required this.entry, this.badge});
+  const _LessonTile({required this.entry, required this.day, this.badge});
   final Map<String, dynamic> entry;
+  final DateTime day;
   final String? badge;
 
   @override
@@ -288,6 +291,7 @@ class _LessonTile extends StatelessWidget {
         ? '${entry['stream']['name']}'
         : (entry['groups'] as List).map((g) => g['name']).join(', ');
     final sub = entry['subgroup'] != null ? ' · ${entry['subgroup']['name']}-nji kiçi topar' : '';
+    final past = !day.isAfter(dayOnly(DateTime.now()));
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -307,7 +311,11 @@ class _LessonTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(color: badge != null ? color : C.border, width: badge != null ? 1.5 : 1),
             ),
-            child: IntrinsicHeight(
+            clipBehavior: Clip.antiAlias,
+            // Sapaga basyp talyplaryň sanawyny açmak we baha goýmak.
+            child: InkWell(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LessonMarksScreen(entry: entry, day: day))),
+              child: IntrinsicHeight(
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Container(
                   width: 4,
@@ -332,10 +340,20 @@ class _LessonTile extends StatelessWidget {
                       _info(Icons.meeting_room_outlined, 'Otag ${entry['room']?['name'] ?? '—'}', bold: true),
                       const SizedBox(height: 3),
                       _info(Icons.groups_outlined, '$groups$sub'),
+                      if (past) ...[
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Icon(canMark(day) ? Icons.edit_note : Icons.visibility_outlined, size: 18, color: C.primary),
+                          const SizedBox(width: 6),
+                          Text(canMark(day) ? 'Baha goý' : 'Bahalary gör',
+                              style: const TextStyle(color: C.primary, fontWeight: FontWeight.w600, fontSize: 13.5)),
+                        ]),
+                      ],
                     ]),
                   ),
                 ),
               ]),
+            ),
             ),
           ),
         ),

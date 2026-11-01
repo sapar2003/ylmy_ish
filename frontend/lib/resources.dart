@@ -105,6 +105,13 @@ const resources = <ResourceSpec>[
     FieldSpec('student_count', 'Talyp sany', type: FieldType.integer),
     FieldSpec('group_id', 'Topar', type: FieldType.ref, ref: 'groups'),
   ]),
+  ResourceSpec(endpoint: 'students', description: 'Talyplar: ady, topary we kiçi topary. Mugallym sapagyň talyplaryna baha goýýar. Hakyky sanaw ýok bolsa, "Žurnal" sahypasyndan synag talyplaryny döredip bolýar.', title: 'Talyplar', singular: 'Talyp', fields: [
+    FieldSpec('full_name', 'Ady, familiýasy'),
+    FieldSpec('group_id', 'Topar', type: FieldType.ref, ref: 'groups'),
+    FieldSpec('subgroup_id', 'Kiçi topar', type: FieldType.ref, ref: 'subgroups', required: false),
+    FieldSpec('number', 'Talyp belgisi', required: false),
+    FieldSpec('active', 'Okaýar', type: FieldType.boolean, required: false),
+  ]),
   ResourceSpec(
     endpoint: 'teachers',
     description: 'Mugallymlar. "Boş wagty" düwmesi bilen mugallymyň okadyp bilmeýän ýa-da isleýän wagtlaryny belläň.',

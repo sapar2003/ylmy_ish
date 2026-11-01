@@ -45,6 +45,7 @@ class Ref(BaseModel):
 
 class EntryRead(BaseModel):
     id: int
+    assignment_id: int = 0
     time_slot_id: int
     weekday: int
     number: int

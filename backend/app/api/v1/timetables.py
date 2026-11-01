@@ -114,7 +114,7 @@ def list_entries(
         room = rooms.get(entry.room_id) if entry.room_id else None
         sub = subgroups.get(a.subgroup_id) if a.subgroup_id else None
         out.append(s.EntryRead(
-            id=entry.id, time_slot_id=slot.id, weekday=slot.weekday, number=slot.number,
+            id=entry.id, assignment_id=a.id, time_slot_id=slot.id, weekday=slot.weekday, number=slot.number,
             starts_at=slot.starts_at, ends_at=slot.ends_at,
             subject=s.Ref(id=item.subject_id, name=subjects[item.subject_id].name),
             lesson_type=item.lesson_type,

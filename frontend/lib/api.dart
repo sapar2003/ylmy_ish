@@ -96,10 +96,16 @@ class Api {
       _send(http.get(_uri(path, query), headers: _headers));
 
   /// Sanaw endpointleri `{items, total}` gaýtarýar; bu diňe `items`-i alýar.
+  /// 500-den köp bolsa (meselem, talyplar) ähli sahypalary yzly-yzyna alýar.
   Future<List<Map<String, dynamic>>> list(String path, [Map<String, dynamic>? query]) async {
-    final body = await get(path, {'limit': 500, ...?query});
-    final items = body is Map ? body['items'] : body;
-    return (items as List).cast<Map<String, dynamic>>();
+    final out = <Map<String, dynamic>>[];
+    while (true) {
+      final body = await get(path, {'limit': 500, 'offset': out.length, ...?query});
+      if (body is! Map) return (body as List).cast<Map<String, dynamic>>();
+      final items = (body['items'] as List).cast<Map<String, dynamic>>();
+      out.addAll(items);
+      if (items.isEmpty || out.length >= (body['total'] as int? ?? 0)) return out;
+    }
   }
 
   Future<dynamic> post(String path, Object data) =>

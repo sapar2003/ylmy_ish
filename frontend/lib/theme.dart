@@ -326,6 +326,7 @@ const navSections = [
   NavSection('Mugallymlar we otaglar', AppColors.resources, ['teachers', 'buildings', 'room-types', 'rooms']),
   NavSection('Okuw meýilnamasy', AppColors.study, ['shifts', 'subjects', 'streams', 'curriculum']),
   NavSection('Synaglar', AppColors.exams, ['exam-sessions', 'exam-periods', 'exams']),
+  NavSection('Bahalar', AppColors.secondary, ['students']),
 ];
 
 const resourceIcons = {
@@ -345,6 +346,7 @@ const resourceIcons = {
   'exam-sessions': Icons.event_note_outlined,
   'exam-periods': Icons.access_time,
   'exams': Icons.assignment_outlined,
+  'students': Icons.school_outlined,
 };
 
 Color sectionColor(String endpoint) =>

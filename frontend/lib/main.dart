@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'pages/journal_page.dart';
 import 'pages/accounts_page.dart';
 import 'pages/crud_page.dart';
 import 'pages/dashboard_page.dart';
@@ -59,6 +60,7 @@ final List<NavGroup> navGroups = [
       for (final e in s.endpoints) ...[
         NavEntry(e, _spec(e)?.title ?? e, resourceIcons[e] ?? Icons.list, s.color),
         if (e == 'teachers') const NavEntry('accounts', 'Mugallym hasaplary', Icons.badge_outlined, AppColors.resources),
+        if (e == 'students') const NavEntry('journal', 'Žurnal', Icons.grading_outlined, AppColors.secondary),
       ],
     ]),
 ];
@@ -90,6 +92,7 @@ class _HomePageState extends State<HomePage> {
         'timetable' => const TimetablePage(),
         'exam-timetable' => const ExamPage(),
         'accounts' => const AccountsPage(),
+        'journal' => const JournalPage(),
         _ => CrudPage(spec: _spec(key)!),
       };
 

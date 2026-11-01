@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app import models as m
 from app.api.auth import require_admin
 from app.api.crud import build_crud_router
-from app.api.v1 import curriculum, docx, exams, resources, timetables, users
+from app.api.v1 import curriculum, docx, exams, journal, resources, timetables, users
 from app.schemas import structure as s
 
 api_router = APIRouter(prefix="/api/v1")
@@ -43,3 +43,4 @@ admin_router.include_router(docx.router)
 api_router.include_router(admin_router)
 # Giriş (açyk), hasaplar we çap etmek (admin), "meniň raspisaniýäm" (mugallym) — öz barlaglary bilen.
 api_router.include_router(users.router)
+api_router.include_router(journal.router)
