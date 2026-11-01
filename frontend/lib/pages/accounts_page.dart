@@ -118,7 +118,7 @@ class _AccountsPageState extends State<AccountsPage> {
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const PageTitle(title: 'Mugallym hasaplary', icon: Icons.badge, color: AppColors.accent),
+          const PageTitle(title: 'Mugallym hasaplary', icon: Icons.badge_outlined, color: AppColors.resources),
           const SizedBox(width: 16),
           if (!_loading) Chip(label: Text('${_users.length}')),
           const Spacer(),

@@ -49,48 +49,117 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.sidebarTop, AppColors.sidebarBottom],
-          ),
-        ),
-        child: Center(
-          child: SizedBox(
-            width: 380,
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Icon(Icons.event_available, size: 44, color: AppColors.accent),
-                  const SizedBox(height: 8),
-                  const Text('Raspisaniýe', textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                  const Text('Admin girişi', textAlign: TextAlign.center),
-                  const SizedBox(height: 20),
-                  TextField(controller: _user, decoration: const InputDecoration(labelText: 'Login')),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _pass,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Parol'),
-                    onSubmitted: (_) => _login(),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ],
-                  const SizedBox(height: 20),
-                  FilledButton(onPressed: _busy ? null : _login, child: const Text('Gir')),
+    final wide = MediaQuery.sizeOf(context).width > 900;
+    final form = Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (!wide) ...[
+              Row(children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.event_available, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Text('Raspisaniýe', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              ]),
+              const SizedBox(height: 32),
+            ],
+            const Text('Ulgama giriş', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            const Text('Administratoryň login we paroly bilen giriň.', style: TextStyle(color: AppColors.textMuted)),
+            const SizedBox(height: 28),
+            const Text('Login', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _user,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'admin', prefixIcon: Icon(Icons.person_outline, size: 20)),
+            ),
+            const SizedBox(height: 16),
+            const Text('Parol', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _pass,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: '••••••••', prefixIcon: Icon(Icons.lock_outline, size: 20)),
+              onSubmitted: (_) => _login(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: AppColors.dangerSoft, borderRadius: BorderRadius.circular(8)),
+                child: Row(children: [
+                  const Icon(Icons.error_outline, size: 18, color: AppColors.danger),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.danger))),
                 ]),
               ),
+            ],
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _busy ? null : _login,
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
+              child: _busy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Gir'),
             ),
-          ),
+            const SizedBox(height: 20),
+            const Text('Mugallymlar öz raspisaniýesini telefon programmasynda görýär.',
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+          ]),
         ),
       ),
+    );
+    if (!wide) return Scaffold(backgroundColor: AppColors.surface, body: form);
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: Row(children: [
+        Expanded(
+          child: Container(
+            color: AppColors.sidebarTop,
+            padding: const EdgeInsets.all(48),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.event_available, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                const Text('Raspisaniýe', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+              ]),
+              const Spacer(),
+              const Text('Uniwersitetiň raspisaniýesini\nawtomat düzmek ulgamy',
+                  style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w700, height: 1.25)),
+              const SizedBox(height: 16),
+              for (final line in const [
+                'Hepdelik we synag raspisaniýesi — gabat gelmesiz',
+                'Sanawjy we maýdalawjy hepdeler',
+                'Word görnüşinde resmi nusga',
+                'Mugallymlar üçin telefon programmasy',
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(children: [
+                    const Icon(Icons.check_circle, size: 18, color: AppColors.success),
+                    const SizedBox(width: 10),
+                    Text(line, style: const TextStyle(color: Color(0xFFD0D5DD), fontSize: 15)),
+                  ]),
+                ),
+              const Spacer(),
+              const Text('Halkara nebit we gaz uniwersiteti', style: TextStyle(color: Color(0xFF98A2B3))),
+            ]),
+          ),
+        ),
+        Expanded(child: form),
+      ]),
     );
   }
 }

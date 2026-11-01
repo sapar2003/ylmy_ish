@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'pages/accounts_page.dart';
 import 'pages/crud_page.dart';
+import 'pages/dashboard_page.dart';
 import 'pages/exam_page.dart';
 import 'pages/login_page.dart';
 import 'pages/timetable_page.dart';
@@ -29,6 +30,39 @@ class RaspisaniyeApp extends StatelessWidget {
   }
 }
 
+/// Menýudaky bir sahypa.
+class NavEntry {
+  const NavEntry(this.key, this.label, this.icon, this.color);
+  final String key; // 'home', 'timetable', 'exam-timetable', 'accounts' ýa-da sanawyň endpointi
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+class NavGroup {
+  const NavGroup(this.title, this.entries);
+  final String? title;
+  final List<NavEntry> entries;
+}
+
+ResourceSpec? _spec(String endpoint) => resources.where((r) => r.endpoint == endpoint).firstOrNull;
+
+/// Menýu işiň tertibine görä toparlanýar.
+final List<NavGroup> navGroups = [
+  const NavGroup(null, [NavEntry('home', 'Baş sahypa', Icons.space_dashboard_outlined, AppColors.primary)]),
+  const NavGroup('Raspisaniýe', [
+    NavEntry('timetable', 'Hepdelik raspisaniýe', Icons.calendar_view_week_outlined, AppColors.schedule),
+    NavEntry('exam-timetable', 'Synag raspisaniýesi', Icons.fact_check_outlined, AppColors.exams),
+  ]),
+  for (final s in navSections)
+    NavGroup(s.title, [
+      for (final e in s.endpoints) ...[
+        NavEntry(e, _spec(e)?.title ?? e, resourceIcons[e] ?? Icons.list, s.color),
+        if (e == 'teachers') const NavEntry('accounts', 'Mugallym hasaplary', Icons.badge_outlined, AppColors.resources),
+      ],
+    ]),
+];
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -37,153 +71,176 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _index = 0; // 0 = raspisaniýe, 1 = synag raspisaniýesi, 2 = hasaplar, 3.. = sanawlar
-  static const _pages = 3;
+  String _page = 'home';
+  bool _collapsed = false;
+  String _username = 'admin';
+
+  @override
+  void initState() {
+    super.initState();
+    Api.instance.get('auth/me').then((me) {
+      if (mounted) setState(() => _username = '${me['username']}');
+    }).catchError((_) {});
+  }
+
+  void _open(String key) => setState(() => _page = key);
+
+  Widget _pageFor(String key) => switch (key) {
+        'home' => DashboardPage(onOpen: _open),
+        'timetable' => const TimetablePage(),
+        'exam-timetable' => const ExamPage(),
+        'accounts' => const AccountsPage(),
+        _ => CrudPage(spec: _spec(key)!),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final page = switch (_index) {
-      0 => const TimetablePage(),
-      1 => const ExamPage(),
-      2 => const AccountsPage(),
-      _ => CrudPage(spec: resources[_index - _pages]),
-    };
+    final narrow = MediaQuery.sizeOf(context).width < 1100;
+    final collapsed = _collapsed || narrow;
     return Scaffold(
-      body: Row(
-        children: [
-          Container(
-            width: 250,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.sidebarTop, AppColors.sidebarBottom],
-              ),
-            ),
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _header(),
-                _sectionTitle('Raspisaniýe', AppColors.schedule),
-                _navItem(0, Icons.calendar_view_week, 'Raspisaniýe', AppColors.schedule),
-                _navItem(1, Icons.fact_check, 'Synag raspisaniýesi', AppColors.exams),
-                _navItem(2, Icons.badge, 'Mugallym hasaplary', AppColors.accent),
-                for (final s in navSections) ...[
-                  _sectionTitle(s.title, s.color),
-                  for (final (i, r) in resources.indexed)
-                    if (s.endpoints.contains(r.endpoint))
-                      _navItem(i + _pages, resourceIcons[r.endpoint] ?? Icons.list, r.title, s.color),
+      body: Row(children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: collapsed ? 72 : 256,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(right: BorderSide(color: AppColors.border)),
+          ),
+          child: Column(children: [
+            _brand(collapsed),
+            const Divider(),
+            Expanded(
+              child: ListView(padding: const EdgeInsets.fromLTRB(10, 8, 10, 8), children: [
+                for (final g in navGroups) ...[
+                  if (g.title != null) _groupTitle(g.title!, collapsed),
+                  for (final e in g.entries) _navItem(e, collapsed),
                 ],
-                const SizedBox(height: 12),
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.logout, color: Colors.white70),
-                  title: const Text('Çykmak', style: TextStyle(color: Colors.white70)),
-                  onTap: () => Api.instance.setToken(null),
-                ),
-                const SizedBox(height: 16),
-              ],
+              ]),
             ),
-          ),
-          Expanded(
-            child: KeyedSubtree(key: ValueKey(_index), child: page),
-          ),
-        ],
-      ),
+            const Divider(),
+            _userTile(collapsed, narrow),
+          ]),
+        ),
+        Expanded(child: KeyedSubtree(key: ValueKey(_page), child: _pageFor(_page))),
+      ]),
     );
   }
 
-  Widget _header() => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 24, 4, 12),
-    child: Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [AppColors.accent, Color(0xFFFFB74D)]),
-            borderRadius: BorderRadius.circular(12),
+  Widget _brand(bool collapsed) => Padding(
+        padding: EdgeInsets.fromLTRB(collapsed ? 16 : 18, 18, 12, 16),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.event_available, color: Colors.white, size: 22),
           ),
-          child: const Icon(Icons.event_available, color: Colors.white),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          if (!collapsed) ...[
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Raspisaniýe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+                Text('Halkara nebit we gaz uniwersiteti',
+                    overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+              ]),
+            ),
+          ],
+        ]),
+      );
+
+  Widget _groupTitle(String title, bool collapsed) => collapsed
+      ? const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider())
+      : Padding(
+          padding: const EdgeInsets.fromLTRB(10, 18, 10, 6),
+          child: Text(title.toUpperCase(),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: AppColors.textSubtle)),
+        );
+
+  Widget _navItem(NavEntry e, bool collapsed) {
+    final selected = _page == e.key;
+    final item = Material(
+      color: selected ? AppColors.primarySoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _open(e.key),
+        hoverColor: AppColors.background,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 10, vertical: 9),
+          child: Row(
+            mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
             children: [
-              Text(
-                'Raspisaniýe',
-                style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800),
-              ),
-              Text(
-                'Halkara nebit we gaz uniwersiteti',
-                style: TextStyle(color: Colors.white70, fontSize: 11),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _sectionTitle(String title, Color color) => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 18, 8, 6),
-    child: Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title.toUpperCase(),
-          style: const TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2),
-        ),
-      ],
-    ),
-  );
-
-  Widget _navItem(int index, IconData icon, String label, Color color) {
-    final selected = _index == index;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Material(
-        color: selected ? Colors.white : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          hoverColor: Colors.white.withValues(alpha: 0.1),
-          onTap: () => setState(() => _index = index),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: selected ? color : color.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 16, color: Colors.white),
-                ),
+              Icon(e.icon, size: 20, color: selected ? AppColors.primary : AppColors.textMuted),
+              if (!collapsed) ...[
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected ? AppColors.sidebarTop : Colors.white,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13.5,
-                    ),
-                  ),
+                  child: Text(e.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                        color: selected ? AppColors.primaryDark : AppColors.text,
+                      )),
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: collapsed ? Tooltip(message: e.label, preferBelow: false, child: item) : item,
+    );
+  }
+
+  Widget _userTile(bool collapsed, bool narrow) {
+    final menu = PopupMenuButton<String>(
+      tooltip: 'Hasap',
+      onSelected: (v) async {
+        switch (v) {
+          case 'password':
+            await showDialog(context: context, builder: (_) => const ChangePasswordDialog());
+          case 'logout':
+            Api.instance.setToken(null);
+          case 'collapse':
+            setState(() => _collapsed = !_collapsed);
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.key_outlined), title: Text('Paroly çalyş'))),
+        if (!narrow)
+          PopupMenuItem(
+            value: 'collapse',
+            child: ListTile(
+              leading: Icon(_collapsed ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left),
+              title: Text(_collapsed ? 'Menýuny giňelt' : 'Menýuny kiçelt'),
+            ),
+          ),
+        const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Çykmak'))),
+      ],
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 16, vertical: 14),
+        child: Row(mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
+          CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.primarySoft,
+            child: Text(_username.substring(0, 1).toUpperCase(),
+                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+          ),
+          if (!collapsed) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_username, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                const Text('Administrator', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              ]),
+            ),
+            const Icon(Icons.unfold_more, size: 18, color: AppColors.textMuted),
+          ],
+        ]),
+      ),
+    );
+    return menu;
   }
 }

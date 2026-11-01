@@ -189,7 +189,12 @@ class _ExamPageState extends State<ExamPage> {
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const PageTitle(title: 'Synag raspisaniýesi', icon: Icons.fact_check, color: AppColors.exams),
+          const PageTitle(
+            title: 'Synag raspisaniýesi',
+            icon: Icons.fact_check_outlined,
+            color: AppColors.exams,
+            subtitle: 'Synag möwsümi boýunça awtomat düzmek',
+          ),
           const SizedBox(width: 24),
           // Uzyn atlar sygar ýaly saýlawlar galan ýeri paýlaşýar we "..." bilen gysgalýar.
           Expanded(
@@ -377,14 +382,14 @@ class _ExamPageState extends State<ExamPage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
-          border: TableBorder.all(color: AppColors.primary.withValues(alpha: 0.12)),
+          border: TableBorder.all(color: AppColors.border),
           defaultColumnWidth: const FixedColumnWidth(220),
           columnWidths: const {0: FixedColumnWidth(120)},
           defaultVerticalAlignment: TableCellVerticalAlignment.top,
           children: [
             TableRow(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [AppColors.sidebarTop, AppColors.primary]),
+                color: AppColors.gridHeader,
               ),
               children: [
                 const Padding(padding: EdgeInsets.all(8), child: Text('Sene', style: gridHeadStyle)),

@@ -230,7 +230,12 @@ class _TimetablePageState extends State<TimetablePage> {
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const PageTitle(title: 'Raspisaniýe', icon: Icons.calendar_view_week, color: AppColors.schedule),
+          const PageTitle(
+            title: 'Hepdelik raspisaniýe',
+            icon: Icons.calendar_view_week_outlined,
+            color: AppColors.schedule,
+            subtitle: 'Düzmek, görmek, Word-a ýüklemek we mugallymlara çap etmek',
+          ),
           const SizedBox(width: 24),
           // Uzyn at sygar ýaly saýlaw galan ýeri alýar we "..." bilen gysgalýar.
           Expanded(
@@ -473,14 +478,14 @@ class _TimetablePageState extends State<TimetablePage> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
-          border: TableBorder.all(color: AppColors.primary.withValues(alpha: 0.12)),
+          border: TableBorder.all(color: AppColors.border),
           defaultColumnWidth: const FixedColumnWidth(190),
           columnWidths: const {0: FixedColumnWidth(90)},
           defaultVerticalAlignment: TableCellVerticalAlignment.top,
           children: [
             TableRow(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [AppColors.sidebarTop, AppColors.primary]),
+                color: AppColors.gridHeader,
               ),
               children: [
                 const Padding(padding: EdgeInsets.all(8), child: Text('Wagt', style: gridHeadStyle)),

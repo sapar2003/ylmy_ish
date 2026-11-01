@@ -5,7 +5,8 @@ import '../resources.dart';
 import '../theme.dart';
 import 'dialogs.dart';
 
-/// Islendik sanaw üçin umumy sahypa: tablisa, gözleg, goşmak, üýtgetmek, aýyrmak.
+/// Islendik sanaw üçin umumy sahypa: düşündiriş, gözleg, süzgüç, tertiplemek, sahypalara bölmek,
+/// goşmak, üýtgetmek, aýyrmak we sanawa mahsus hereketler (boş wagty, mugallymlar, wagt slotlary).
 class CrudPage extends StatefulWidget {
   const CrudPage({super.key, required this.spec});
   final ResourceSpec spec;
@@ -15,11 +16,16 @@ class CrudPage extends StatefulWidget {
 }
 
 class _CrudPageState extends State<CrudPage> {
+  static const _pageSize = 25;
+  static const _common = -1; // fakulteti görkezilmedik (umumy)
+
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _refs = {};
   String _query = '';
-  int? _faculty; // null: hemmesi, _common: fakulteti görkezilmedik (umumy)
-  static const _common = -1;
+  int? _faculty; // null: hemmesi
+  int? _sortColumn;
+  bool _sortAsc = true;
+  int _page = 0;
   bool _loading = true;
   String? _error;
 
@@ -29,16 +35,6 @@ class _CrudPageState extends State<CrudPage> {
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void didUpdateWidget(CrudPage old) {
-    super.didUpdateWidget(old);
-    if (old.spec.endpoint != spec.endpoint) {
-      _query = '';
-      _faculty = null;
-      _load();
-    }
   }
 
   Future<void> _load() async {
@@ -99,38 +95,11 @@ class _CrudPageState extends State<CrudPage> {
         null => null,
       };
 
-  String _facultyLabel(Map<String, dynamic> f) => '${f['short_name'] ?? f['name']}';
-
-  Widget _facultyChips() {
-    final faculties = _refs['faculties'] ?? [];
-    int count(int? id) => _items.where((i) => id == null || (_facultyOf(i) ?? _common) == id).length;
-    final hasCommon = _items.any((i) => _facultyOf(i) == null);
-    return Wrap(spacing: 8, runSpacing: 8, children: [
-      ChoiceChip(
-        label: Text('Hemmesi (${count(null)})'),
-        selected: _faculty == null,
-        onSelected: (_) => setState(() => _faculty = null),
-      ),
-      for (final f in faculties)
-        if (count(f['id'] as int) > 0)
-          ChoiceChip(
-            label: Text('${_facultyLabel(f)} (${count(f['id'] as int)})'),
-            tooltip: '${f['name']}',
-            selected: _faculty == f['id'],
-            onSelected: (_) => setState(() => _faculty = f['id'] as int),
-          ),
-      if (hasCommon)
-        ChoiceChip(
-          label: Text('Umumy (${count(_common)})'),
-          tooltip: 'Fakulteti görkezilmedik: ähli fakultetler ulanyp bilýär',
-          selected: _faculty == _common,
-          onSelected: (_) => setState(() => _faculty = _common),
-        ),
-    ]);
+  String _refName(String ref, dynamic id) {
+    final row = _refs[ref]?.where((r) => r['id'] == id).firstOrNull;
+    if (row == null) return '#$id';
+    return '${ref == 'faculties' ? (row['short_name'] ?? row['name']) : row['name']}';
   }
-
-  String _refName(String ref, dynamic id) =>
-      _refs[ref]?.firstWhere((r) => r['id'] == id, orElse: () => {'name': '#$id'})['name'] ?? '#$id';
 
   Future<void> _edit([Map<String, dynamic>? item]) async {
     final saved = await showDialog<bool>(
@@ -142,8 +111,7 @@ class _CrudPageState extends State<CrudPage> {
 
   Future<void> _delete(Map<String, dynamic> item) async {
     final label = item['name'] ?? '#${item['id']}';
-    final ok = await confirm(context, '"$label" aýrylsynmy?');
-    if (!ok) return;
+    if (!await confirm(context, '"$label" aýrylsynmy? Bu hereketi yzyna gaýtaryp bolmaýar.')) return;
     try {
       await Api.instance.delete('${spec.endpoint}/${item['id']}');
       _load();
@@ -161,101 +129,238 @@ class _CrudPageState extends State<CrudPage> {
     await showDialog(context: context, builder: (_) => dialog);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final columns = spec.fields.where((f) => f.showInTable).toList();
+  List<FieldSpec> get _columns => spec.fields.where((f) => f.showInTable).toList();
+
+  List<Map<String, dynamic>> _visibleRows() {
     final q = _query.toLowerCase();
     final rows = _items.where((item) {
       if (_faculty != null && (_facultyOf(item) ?? _common) != _faculty) return false;
       if (q.isEmpty) return true;
-      return columns.any((f) => _display(f, item[f.key]).toLowerCase().contains(q));
+      return _columns.any((f) => _display(f, item[f.key]).toLowerCase().contains(q));
     }).toList();
+    if (_sortColumn != null) {
+      final f = _columns[_sortColumn!];
+      int cmp(Map<String, dynamic> a, Map<String, dynamic> b) {
+        final x = a[f.key], y = b[f.key];
+        if (f.type == FieldType.integer && x is num && y is num) return x.compareTo(y);
+        return _display(f, x).toLowerCase().compareTo(_display(f, y).toLowerCase());
+      }
 
+      rows.sort((a, b) => _sortAsc ? cmp(a, b) : cmp(b, a));
+    }
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            PageTitle(
+      padding: const EdgeInsets.fromLTRB(32, 28, 32, 24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: PageTitle(
               title: spec.title,
               icon: resourceIcons[spec.endpoint] ?? Icons.list,
               color: sectionColor(spec.endpoint),
               count: _loading ? null : _items.length,
             ),
-            const Spacer(),
-            SizedBox(
-              width: 240,
-              child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Gözle',
-                ),
-                onChanged: (v) => setState(() => _query = v),
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: () => _edit(),
-              icon: const Icon(Icons.add),
-              label: Text('${spec.singular} goş'),
-            ),
-          ]),
-          if (spec.facultyFilter != null && !_loading && _items.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _facultyChips(),
-          ],
-          const SizedBox(height: 16),
-          Expanded(child: _body(columns, rows)),
-        ],
-      ),
+          ),
+          const SizedBox(width: 16),
+          FilledButton.icon(
+            onPressed: () => _edit(),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text('${spec.singular} goş'),
+          ),
+        ]),
+        if (spec.description != null) ...[const SizedBox(height: 16), HelpNote(spec.description!)],
+        const SizedBox(height: 16),
+        Expanded(child: Card(clipBehavior: Clip.antiAlias, child: _body())),
+      ]),
     );
   }
 
-  Widget _body(List<FieldSpec> columns, List<Map<String, dynamic>> rows) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: _load, child: const Text('Gaýtadan synanyş')),
-        ]),
-      );
-    }
-    if (_items.isEmpty) {
-      return Center(child: Text('Heniz ${spec.title.toLowerCase()} ýok. "${spec.singular} goş" düwmesine basyň.'));
-    }
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            headingRowColor: WidgetStatePropertyAll(sectionColor(spec.endpoint).withValues(alpha: 0.14)),
-            columns: [
-              for (final f in columns) DataColumn(label: Text(f.label)),
-              if (spec.facultyFilter == FacultyVia.department) const DataColumn(label: Text('Fakultet')),
-              const DataColumn(label: Text('')),
-            ],
-            rows: [
-              for (final item in rows)
-                DataRow(cells: [
-                  for (final f in columns) DataCell(Text(_display(f, item[f.key]))),
-                  if (spec.facultyFilter == FacultyVia.department)
-                    DataCell(Text(_facultyOf(item) == null ? '—' : _refName('faculties', _facultyOf(item)))),
-                  DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                    for (final a in spec.actions)
-                      TextButton(onPressed: () => _action(a, item), child: Text(actionLabel(a))),
-                    IconButton(tooltip: 'Üýtget', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(item)),
-                    IconButton(tooltip: 'Aýyr', icon: const Icon(Icons.delete_outline), onPressed: () => _delete(item)),
-                  ])),
-                ]),
-            ],
+  Widget _toolbar(int shown) {
+    final faculties = _refs['faculties'] ?? [];
+    final hasCommon = _items.any((i) => _facultyOf(i) == null);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(children: [
+        SizedBox(
+          width: 300,
+          child: TextField(
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 20), hintText: 'Gözle...'),
+            onChanged: (v) => setState(() {
+              _query = v;
+              _page = 0;
+            }),
           ),
         ),
-      ),
+        if (spec.facultyFilter != null) ...[
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 220,
+            child: DropdownButtonFormField<int?>(
+              initialValue: _faculty,
+              isExpanded: true,
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.filter_list, size: 20)),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('Ähli fakultetler')),
+                for (final f in faculties)
+                  DropdownMenuItem<int?>(value: f['id'] as int, child: Text('${f['short_name'] ?? f['name']}')),
+                if (hasCommon) const DropdownMenuItem<int?>(value: _common, child: Text('Umumy (fakultetsiz)')),
+              ],
+              onChanged: (v) => setState(() {
+                _faculty = v;
+                _page = 0;
+              }),
+            ),
+          ),
+        ],
+        const Spacer(),
+        Text(
+          shown == _items.length ? '${_items.length} ýazgy' : '$shown / ${_items.length} ýazgy',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+        ),
+        const SizedBox(width: 4),
+        IconButton(tooltip: 'Täzele', onPressed: _load, icon: const Icon(Icons.refresh, size: 20)),
+      ]),
     );
+  }
+
+  Widget _body() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return EmptyState(icon: Icons.cloud_off, title: 'Maglumat ýüklenmedi', text: _error,
+          action: OutlinedButton(onPressed: _load, child: const Text('Gaýtadan synanyş')));
+    }
+    if (_items.isEmpty) {
+      return EmptyState(
+        icon: resourceIcons[spec.endpoint] ?? Icons.inbox_outlined,
+        title: 'Heniz ${spec.title.toLowerCase()} ýok',
+        text: spec.description,
+        action: FilledButton.icon(
+          onPressed: () => _edit(),
+          icon: const Icon(Icons.add, size: 18),
+          label: Text('${spec.singular} goş'),
+        ),
+      );
+    }
+    final rows = _visibleRows();
+    final pages = (rows.length / _pageSize).ceil().clamp(1, 1 << 30);
+    final page = _page.clamp(0, pages - 1);
+    final slice = rows.skip(page * _pageSize).take(_pageSize).toList();
+    final columns = _columns;
+    return Column(children: [
+      _toolbar(rows.length),
+      const Divider(),
+      Expanded(
+        child: rows.isEmpty
+            ? const EmptyState(icon: Icons.search_off, title: 'Hiç zat tapylmady', text: 'Gözleg sözüni ýa-da süzgüji üýtgediň.')
+            : LayoutBuilder(
+                builder: (context, box) => SingleChildScrollView(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: box.maxWidth),
+                      child: DataTable(
+                        sortColumnIndex: _sortColumn,
+                        sortAscending: _sortAsc,
+                        columnSpacing: 28,
+                        horizontalMargin: 16,
+                        columns: [
+                          for (final (i, f) in columns.indexed)
+                            DataColumn(
+                              label: Text(f.label.toUpperCase()),
+                              numeric: f.type == FieldType.integer,
+                              onSort: (_, _) => setState(() {
+                                _sortAsc = _sortColumn == i ? !_sortAsc : true;
+                                _sortColumn = i;
+                              }),
+                            ),
+                          if (spec.facultyFilter == FacultyVia.department) const DataColumn(label: Text('FAKULTET')),
+                          const DataColumn(label: Text('')),
+                        ],
+                        rows: [
+                          for (final item in slice)
+                            DataRow(cells: [
+                              for (final (i, f) in columns.indexed)
+                                DataCell(
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 360),
+                                    child: Text(
+                                      _display(f, item[f.key]),
+                                      overflow: TextOverflow.ellipsis,
+                                      style: i == 0 ? const TextStyle(fontWeight: FontWeight.w600) : null,
+                                    ),
+                                  ),
+                                  onTap: () => _edit(item),
+                                ),
+                              if (spec.facultyFilter == FacultyVia.department)
+                                DataCell(_facultyOf(item) == null
+                                    ? const Text('—')
+                                    : StatusPill(_refName('faculties', _facultyOf(item)), color: AppColors.primary)),
+                              DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+                                for (final a in spec.actions)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 32),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10)),
+                                      onPressed: () => _action(a, item),
+                                      icon: Icon(actionIcon(a), size: 16),
+                                      label: Text(actionLabel(a), style: const TextStyle(fontSize: 13)),
+                                    ),
+                                  ),
+                                PopupMenuButton<String>(
+                                  tooltip: 'Hereketler',
+                                  icon: const Icon(Icons.more_horiz, color: AppColors.textMuted),
+                                  onSelected: (v) => v == 'edit' ? _edit(item) : _delete(item),
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Üýtget'))),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: ListTile(
+                                        leading: Icon(Icons.delete_outline, color: AppColors.danger),
+                                        title: Text('Aýyr', style: TextStyle(color: AppColors.danger)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ])),
+                            ]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+      if (pages > 1) ...[
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(children: [
+            Text('${page * _pageSize + 1}–${(page * _pageSize + slice.length)} / ${rows.length}',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: page > 0 ? () => setState(() => _page = page - 1) : null,
+              icon: const Icon(Icons.chevron_left, size: 18),
+              label: const Text('Öňki'),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('${page + 1} / $pages', style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            OutlinedButton.icon(
+              onPressed: page < pages - 1 ? () => setState(() => _page = page + 1) : null,
+              icon: const Icon(Icons.chevron_right, size: 18),
+              label: const Text('Indiki'),
+            ),
+          ]),
+        ),
+      ],
+    ]);
   }
 }
 
@@ -263,4 +368,10 @@ String actionLabel(RowAction a) => switch (a) {
       RowAction.availability => 'Boş wagty',
       RowAction.assignments => 'Mugallymlar',
       RowAction.generateSlots => 'Wagt slotlary',
+    };
+
+IconData actionIcon(RowAction a) => switch (a) {
+      RowAction.availability => Icons.event_available_outlined,
+      RowAction.assignments => Icons.person_add_alt,
+      RowAction.generateSlots => Icons.more_time,
     };
