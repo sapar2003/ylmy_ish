@@ -23,6 +23,8 @@ if defined INSTALL (
 
 set DATABASE_URL=sqlite:///./raspisaniye.db
 set STATIC_DIR=%~dp0frontend\build\web
+rem Mugallym app-ynyn web gornushi: http://shu-kompyuter:8000/m/
+set MOBILE_DIR=%~dp0mobile\build\web
 .venv\Scripts\alembic.exe upgrade head
 .venv\Scripts\python.exe -m app.seed --if-empty
 
@@ -31,6 +33,7 @@ start "" /min cmd /c "for /l %%i in (1,1,60) do (curl -s -o nul http://127.0.0.1
 
 echo.
 echo Raspisaniye ishleyar: http://localhost:8000
+echo Telefondan (shol bir Wi-Fi): http://^<shu kompyuterin IP salgysy^>:8000/m/
 echo Bu penjireni yapsanyz serwer duryar.
 echo.
-.venv\Scripts\uvicorn.exe app.main:app --port 8000
+.venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000

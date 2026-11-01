@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'api.dart';
+import 'pages/accounts_page.dart';
 import 'pages/crud_page.dart';
 import 'pages/exam_page.dart';
+import 'pages/login_page.dart';
 import 'pages/timetable_page.dart';
 import 'resources.dart';
 import 'theme.dart';
@@ -17,7 +20,11 @@ class RaspisaniyeApp extends StatelessWidget {
       title: 'Raspisaniýe',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
-      home: const HomePage(),
+      // Girilmedik bolsa (ýa-da token möhleti geçse) giriş sahypasy.
+      home: ValueListenableBuilder<bool>(
+        valueListenable: Api.instance.loggedIn,
+        builder: (_, loggedIn, _) => loggedIn ? const HomePage() : const LoginPage(),
+      ),
     );
   }
 }
@@ -30,14 +37,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _index = 0; // 0 = raspisaniýe, 1 = synag raspisaniýesi, 2.. = sanawlar
-  static const _pages = 2;
+  int _index = 0; // 0 = raspisaniýe, 1 = synag raspisaniýesi, 2 = hasaplar, 3.. = sanawlar
+  static const _pages = 3;
 
   @override
   Widget build(BuildContext context) {
     final page = switch (_index) {
       0 => const TimetablePage(),
       1 => const ExamPage(),
+      2 => const AccountsPage(),
       _ => CrudPage(spec: resources[_index - _pages]),
     };
     return Scaffold(
@@ -59,12 +67,20 @@ class _HomePageState extends State<HomePage> {
                 _sectionTitle('Raspisaniýe', AppColors.schedule),
                 _navItem(0, Icons.calendar_view_week, 'Raspisaniýe', AppColors.schedule),
                 _navItem(1, Icons.fact_check, 'Synag raspisaniýesi', AppColors.exams),
+                _navItem(2, Icons.badge, 'Mugallym hasaplary', AppColors.accent),
                 for (final s in navSections) ...[
                   _sectionTitle(s.title, s.color),
                   for (final (i, r) in resources.indexed)
                     if (s.endpoints.contains(r.endpoint))
                       _navItem(i + _pages, resourceIcons[r.endpoint] ?? Icons.list, r.title, s.color),
                 ],
+                const SizedBox(height: 12),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.logout, color: Colors.white70),
+                  title: const Text('Çykmak', style: TextStyle(color: Colors.white70)),
+                  onTap: () => Api.instance.setToken(null),
+                ),
                 const SizedBox(height: 16),
               ],
             ),

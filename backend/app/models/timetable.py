@@ -2,7 +2,7 @@
 import enum
 from datetime import date
 
-from sqlalchemy import JSON, Date, Enum, Float, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, Enum, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, IdMixin, TimestampMixin
@@ -31,6 +31,8 @@ class Timetable(IdMixin, TimestampMixin, Base):
     # Ýarymýylyň seneleri: senäniň haýsy hepdedigi (1-nji ýa 2-nji) starts_on-yň hepdesinden sanalýar.
     starts_on: Mapped[date | None] = mapped_column(Date)
     ends_on: Mapped[date | None] = mapped_column(Date)
+    # Mugallymlar (mobil app) diňe çap edilen raspisaniýäni görýär; bir wagtda diňe biri çap edilen.
+    published: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     entries: Mapped[list["TimetableEntry"]] = relationship(
         back_populates="timetable", cascade="all, delete-orphan", passive_deletes=True

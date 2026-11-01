@@ -240,6 +240,19 @@ class _ExamPageState extends State<ExamPage> {
                   ),
           ),
           const SizedBox(width: 16),
+          if (_current?['status'] == 'done') ...[
+            PublishButton(
+              path: 'exam-schedules/${_current!['id']}/publish',
+              published: _current!['published'] == true,
+              onChanged: (v) => setState(() {
+                _schedules = [
+                  for (final t in _schedules) {...t, 'published': t['id'] == _current!['id'] ? v : (v ? false : t['published'])},
+                ];
+                _current = _schedules.firstWhere((t) => t['id'] == _current!['id']);
+              }),
+            ),
+            const SizedBox(width: 8),
+          ],
           OutlinedButton.icon(
             onPressed: _current?['status'] == 'done'
                 ? () => showDialog(

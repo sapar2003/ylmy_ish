@@ -6,7 +6,7 @@ Täze synag görnüşi goşmak üçin diňe `ExamKind`-e baha goşmak ýeterlik.
 import enum
 from datetime import date, time
 
-from sqlalchemy import JSON, CheckConstraint, Date, Enum, Float, ForeignKey, String, Time, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Date, Enum, Float, ForeignKey, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, IdMixin, TimestampMixin
@@ -97,6 +97,8 @@ class ExamSchedule(IdMixin, TimestampMixin, Base):
     issues: Mapped[list[str]] = mapped_column(JSON, default=list)
     objective: Mapped[float | None] = mapped_column(Float)
     seconds: Mapped[float | None] = mapped_column(Float)
+    # Mugallymlar diňe çap edilen synag raspisaniýesini görýär; her möwsümde diňe biri çap edilen.
+    published: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     entries: Mapped[list["ExamEntry"]] = relationship(
         back_populates="schedule", cascade="all, delete-orphan", passive_deletes=True
