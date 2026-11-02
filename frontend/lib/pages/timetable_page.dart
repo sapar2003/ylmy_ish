@@ -268,7 +268,7 @@ class _TimetablePageState extends State<TimetablePage> {
                   ),
           ),
           const SizedBox(width: 16),
-          if (_current?['status'] == 'done') ...[
+          if (_current?['status'] == 'done' && !Api.instance.isDean) ...[
             PublishButton(
               path: 'timetables/${_current!['id']}/publish',
               published: _current!['published'] == true,
@@ -294,12 +294,14 @@ class _TimetablePageState extends State<TimetablePage> {
             icon: const Icon(Icons.description_outlined),
             label: const Text('Word'),
           ),
+          if (!Api.instance.isDean) ...[
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _generate,
             icon: const Icon(Icons.auto_awesome),
             label: const Text('Awtomat düz'),
           ),
+          ],
         ]),
         const SizedBox(height: 12),
         if (_current != null) _statusBanner(_current!),

@@ -13,15 +13,20 @@ from app.api.v1.timetables import week_of
 from app.core.security import create_token, hash_password, verify_password
 from app.schemas import user as s
 from app.schemas.timetable import Ref
-from app.services.accounts import create_teacher_accounts, reset_password
+from app.services.accounts import create_dean_account, create_teacher_accounts, reset_password
 
 router = APIRouter()
 
 
+def _ref(o) -> Ref | None:
+    return Ref(id=o.id, name=o.name) if o else None
+
+
 def _me(db, user: m.User) -> s.MeRead:
     teacher = db.get(m.Teacher, user.teacher_id) if user.teacher_id else None
+    faculty = db.get(m.Faculty, user.faculty_id) if user.faculty_id else None
     return s.MeRead(id=user.id, username=user.username, role=user.role, must_change_password=user.must_change_password,
-                    teacher=Ref(id=teacher.id, name=teacher.name) if teacher else None)
+                    teacher=_ref(teacher), faculty=_ref(faculty))
 
 
 # --- giriş ---
@@ -57,17 +62,28 @@ router.include_router(auth)
 users = APIRouter(prefix="/users", tags=["Hasaplar"], dependencies=[Depends(require_admin)])
 
 
-def _user_read(user: m.User, teachers: dict[int, m.Teacher]) -> s.UserRead:
-    t = teachers.get(user.teacher_id) if user.teacher_id else None
+def _user_read(user: m.User, teachers: dict[int, m.Teacher], faculties: dict[int, m.Faculty]) -> s.UserRead:
     return s.UserRead(id=user.id, username=user.username, role=user.role, active=user.active,
                       must_change_password=user.must_change_password,
-                      teacher=Ref(id=t.id, name=t.name) if t else None)
+                      teacher=_ref(teachers.get(user.teacher_id)), faculty=_ref(faculties.get(user.faculty_id)))
 
 
 @users.get("", response_model=list[s.UserRead])
 def list_users(db: DbSession):
     teachers = {t.id: t for t in db.scalars(select(m.Teacher))}
-    return [_user_read(u, teachers) for u in db.scalars(select(m.User).order_by(m.User.role, m.User.username))]
+    faculties = {f.id: f for f in db.scalars(select(m.Faculty))}
+    return [_user_read(u, teachers, faculties)
+            for u in db.scalars(select(m.User).order_by(m.User.role, m.User.username))]
+
+
+@users.post("/deans", response_model=s.IssuedPassword, status_code=status.HTTP_201_CREATED)
+def create_dean_user(payload: s.DeanAccountIn, db: DbSession):
+    """Fakultetiň dekan hasaby: dekan diňe öz fakultetiniň maglumatlaryny görýär we girizýär.
+    Hasap bar bolsa täze wagtlaýyn parol berilýär."""
+    faculty = get_or_404(db, m.Faculty, payload.faculty_id, "Fakultet")
+    user, password = create_dean_account(db, faculty)
+    return s.IssuedPassword(user_id=user.id, username=user.username, password=password, teacher=None,
+                            faculty=_ref(faculty))
 
 
 @users.post("/teachers", response_model=list[s.IssuedPassword], status_code=status.HTTP_201_CREATED)
@@ -85,8 +101,9 @@ def create_teacher_users(payload: s.TeacherAccountsIn, db: DbSession):
 def reset_user_password(user_id: int, db: DbSession):
     user = get_or_404(db, m.User, user_id, "Ulanyjy")
     t = db.get(m.Teacher, user.teacher_id) if user.teacher_id else None
+    f = db.get(m.Faculty, user.faculty_id) if user.faculty_id else None
     return s.IssuedPassword(user_id=user.id, username=user.username, password=reset_password(db, user),
-                            teacher=Ref(id=t.id, name=t.name) if t else None)
+                            teacher=_ref(t), faculty=_ref(f))
 
 
 @users.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

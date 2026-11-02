@@ -5,6 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import models as m
+from app.api import scope as sc
+from app.api.auth import FacultyScope, require_admin
 from app.api.crud import DbSession, build_crud_router, get_or_404
 from app.core.config import settings
 from app.db.session import get_session_factory
@@ -40,7 +42,7 @@ router.include_router(build_crud_router(
     model=m.Exam, create_schema=s.ExamCreate, update_schema=s.ExamUpdate, read_schema=s.ExamRead,
     prefix="/exams", tag="Synaglar",
     filters=("session_id", "group_id", "stream_id", "subject_id", "examiner_id", "assistant_id"),
-    search_field=None, order_by=("session_id", "id"), validate=validate_exam,
+    search_field=None, order_by=("session_id", "id"), validate=validate_exam, scope=sc.EXAM,
 ))
 
 schedules = APIRouter(prefix="/exam-schedules", tags=["Synag raspisaniýesi"])
@@ -51,7 +53,7 @@ def _read(db: Session, sch: m.ExamSchedule) -> s.ExamScheduleRead:
     return s.ExamScheduleRead.model_validate(sch).model_copy(update={"entry_count": count})
 
 
-@schedules.get("/precheck", response_model=s.ExamPrecheckRead)
+@schedules.get("/precheck", response_model=s.ExamPrecheckRead, dependencies=[Depends(require_admin)])
 def run_precheck(session_id: int, db: DbSession):
     """Synag raspisaniýesini düzmezden öň maglumatlary barlaýar (solweri işletmeýär)."""
     session = get_or_404(db, m.ExamSession, session_id, "Synag möwsümi")
@@ -62,7 +64,8 @@ def run_precheck(session_id: int, db: DbSession):
     )
 
 
-@schedules.post("", response_model=s.ExamScheduleRead, status_code=status.HTTP_202_ACCEPTED)
+@schedules.post("", response_model=s.ExamScheduleRead, status_code=status.HTTP_202_ACCEPTED,
+                dependencies=[Depends(require_admin)])
 def create_schedule(
     payload: s.ExamScheduleCreate,
     db: DbSession,
@@ -91,7 +94,7 @@ def get_schedule(schedule_id: int, db: DbSession):
     return _read(db, get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"))
 
 
-@schedules.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@schedules.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_schedule(schedule_id: int, db: DbSession):
     db.delete(get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"))
     db.commit()
@@ -105,8 +108,10 @@ def list_entries(
     group_id: int | None = Query(None, description="Toparyň ähli synaglary (potok synaglary bilen)"),
     teacher_id: int | None = Query(None, description="Mugallymyň uly ýa-da kiçi mugallym bolan synaglary"),
     room_id: int | None = None,
+    fid: FacultyScope = None,
 ):
     get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
+    own = set(db.scalars(sc.faculty_groups(fid))) if fid is not None else None  # dekan: diňe öz toparlary
     rows = db.execute(
         select(m.ExamEntry, m.Exam, m.ExamPeriod)
         .join(m.Exam, m.Exam.id == m.ExamEntry.exam_id)
@@ -124,6 +129,8 @@ def list_entries(
     for entry, exam, period in rows:
         stream = streams.get(exam.stream_id) if exam.stream_id else None
         group_ids = [g.id for g in stream.groups] if stream else [exam.group_id]
+        if own is not None and own.isdisjoint(group_ids):
+            continue
         if group_id is not None and group_id not in group_ids:
             continue
         if teacher_id is not None and teacher_id not in (exam.examiner_id, exam.assistant_id):

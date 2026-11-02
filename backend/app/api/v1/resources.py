@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 
 from app import models as m
-from app.api.crud import DbSession, build_crud_router, commit_or_raise, get_or_404
+from app.api import scope as sc
+from app.api.auth import FacultyScope, require_admin
+from app.api.crud import DbSession, build_crud_router, check_owner, commit_or_raise, get_or_404
 from app.schemas import resources as s
 
 router = APIRouter()
@@ -24,9 +26,9 @@ def get_availability(teacher_id: int, db: DbSession):
 
 
 @teachers.put("/{teacher_id}/availability", response_model=list[s.AvailabilityItem])
-def replace_availability(teacher_id: int, items: list[s.AvailabilityItem], db: DbSession):
+def replace_availability(teacher_id: int, items: list[s.AvailabilityItem], db: DbSession, fid: FacultyScope):
     """Mugallymyň ähli belliklerini täze sanaw bilen çalyşýar."""
-    get_or_404(db, m.Teacher, teacher_id, "Mugallym")
+    check_owner(sc.TEACHER, db, get_or_404(db, m.Teacher, teacher_id, "Mugallym"), fid)
     slot_ids = [i.time_slot_id for i in items]
     if len(set(slot_ids)) != len(slot_ids):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Bir slot iki gezek görkezilipdir.")
@@ -39,7 +41,7 @@ def replace_availability(teacher_id: int, items: list[s.AvailabilityItem], db: D
 build_crud_router(
     model=m.Teacher, create_schema=s.TeacherCreate, update_schema=s.TeacherUpdate,
     read_schema=s.TeacherRead, prefix="/teachers", tag="Mugallym", filters=("department_id",),
-    router=teachers,
+    router=teachers, scope=sc.TEACHER,
 )
 router.include_router(teachers)
 
@@ -47,7 +49,8 @@ router.include_router(teachers)
 time_slots = APIRouter(prefix="/time-slots", tags=["Wagt slotlary"])
 
 
-@time_slots.post("/generate", response_model=list[s.TimeSlotRead], status_code=status.HTTP_201_CREATED)
+@time_slots.post("/generate", response_model=list[s.TimeSlotRead], status_code=status.HTTP_201_CREATED,
+                 dependencies=[Depends(require_admin)])
 def generate_time_slots(payload: s.TimeSlotGenerate, db: DbSession):
     """Smena üçin ähli günleriň slotlaryny döredýär (meselem, 6 gün × 3 jübüt = 18 slot)."""
     get_or_404(db, m.Shift, payload.shift_id, "Smena")
@@ -82,4 +85,5 @@ router.include_router(build_crud_router(
 router.include_router(build_crud_router(
     model=m.Room, create_schema=s.RoomCreate, update_schema=s.RoomUpdate,
     read_schema=s.RoomRead, prefix="/rooms", tag="Otaglar", filters=("building_id", "room_type_id", "faculty_id"),
+    scope=sc.ROOM,
 ))

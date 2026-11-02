@@ -40,7 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Api.instance.list('groups'),
         Api.instance.get('timetables'),
         Api.instance.get('exam-schedules'),
-        Api.instance.get('users'),
+        if (!Api.instance.isDean) Api.instance.get('users'),
       ]);
       if (!mounted) return;
       final n = _endpoints.length;
@@ -49,7 +49,7 @@ class _DashboardPageState extends State<DashboardPage> {
         _students = (r[n] as List).fold<int>(0, (s, g) => s + ((g as Map)['student_count'] as int? ?? 0));
         _timetables = (r[n + 1] as List).cast<Map<String, dynamic>>();
         _exams = (r[n + 2] as List).cast<Map<String, dynamic>>();
-        _teacherAccounts = (r[n + 3] as List).where((u) => u['role'] == 'teacher').length;
+        _teacherAccounts = r.length > n + 3 ? (r[n + 3] as List).where((u) => u['role'] == 'teacher').length : 0;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -82,8 +82,9 @@ class _DashboardPageState extends State<DashboardPage> {
           '${_timetables.where((t) => t['status'] == 'done').length} wersiýa'),
       _Step('Mugallymlara çap etmek', 'Mugallymlar telefonda diňe çap edileni görýär', publishedTt != null, 'timetable',
           publishedTt == null ? 'çap edilmedi' : 'çap edildi'),
-      _Step('Mugallym hasaplary', 'Telefon programmasy üçin login we parol', _teacherAccounts > 0, 'accounts',
-          '$_teacherAccounts hasap'),
+      if (!Api.instance.isDean)
+        _Step('Mugallym hasaplary', 'Telefon programmasy üçin login we parol', _teacherAccounts > 0, 'accounts',
+            '$_teacherAccounts hasap'),
     ];
     final done = steps.where((s) => s.done).length;
 
@@ -237,18 +238,19 @@ class _DashboardPageState extends State<DashboardPage> {
                 FilledButton.icon(
                   onPressed: () => widget.onOpen('timetable'),
                   icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: const Text('Raspisaniýe düz'),
+                  label: Text(Api.instance.isDean ? 'Raspisaniýäni gör' : 'Raspisaniýe düz'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => widget.onOpen('exam-timetable'),
                   icon: const Icon(Icons.fact_check_outlined, size: 18),
                   label: const Text('Synag raspisaniýesi'),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => widget.onOpen('accounts'),
-                  icon: const Icon(Icons.badge_outlined, size: 18),
-                  label: const Text('Mugallym hasaplary'),
-                ),
+                if (!Api.instance.isDean)
+                  OutlinedButton.icon(
+                    onPressed: () => widget.onOpen('accounts'),
+                    icon: const Icon(Icons.badge_outlined, size: 18),
+                    label: const Text('Mugallym hasaplary'),
+                  ),
               ]),
             ]),
           ),

@@ -27,6 +27,11 @@ class Api {
   final ValueNotifier<bool> loggedIn = ValueNotifier(_readToken() != null);
   String? _token = _readToken();
 
+  /// Girýän ulanyjy (`auth/me`): admin ýa-da dekan. Dekan diňe öz fakultetiniň maglumatlaryny görýär.
+  Map<String, dynamic>? me;
+  bool get isDean => me?['role'] == 'dean';
+  int? get deanFaculty => isDean ? me?['faculty']?['id'] as int? : null;
+
   static String? _readToken() {
     try {
       return web.window.localStorage.getItem(_tokenKey);

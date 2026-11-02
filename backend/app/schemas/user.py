@@ -16,6 +16,7 @@ class MeRead(BaseModel):
     username: str
     role: Role
     teacher: Ref | None
+    faculty: Ref | None = None  # dekan üçin
     must_change_password: bool
 
 
@@ -33,6 +34,7 @@ class UserRead(BaseModel):
     username: str
     role: Role
     teacher: Ref | None
+    faculty: Ref | None = None
     must_change_password: bool
     active: bool
 
@@ -47,6 +49,11 @@ class IssuedPassword(BaseModel):
     username: str
     password: str
     teacher: Ref | None
+    faculty: Ref | None = None
+
+
+class DeanAccountIn(BaseModel):
+    faculty_id: int
 
 
 class PublishIn(BaseModel):

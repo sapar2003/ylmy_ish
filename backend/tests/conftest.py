@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
-from app.api.auth import require_admin
+from app.api.auth import require_admin, require_staff
 from app.db import session as db_session
 from app.db.base import Base
 from app.core.config import settings
@@ -28,6 +28,7 @@ def _make_client(as_admin: bool):
     app.dependency_overrides[db_session.get_session_factory] = lambda: TestSession
     if as_admin:  # köp testde giriş barlagy gerek däl: admin hökmünde işleýär
         app.dependency_overrides[require_admin] = lambda: None
+        app.dependency_overrides[require_staff] = lambda: None
     settings.generation_in_background = False
     client_session_factory.append(TestSession)
     return engine, TestClient(app)

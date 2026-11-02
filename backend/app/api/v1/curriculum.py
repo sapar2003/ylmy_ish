@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models as m
+from app.api import scope as sc
 from app.api.crud import build_crud_router
 from app.schemas import curriculum as s
 
@@ -65,21 +66,21 @@ def validate_assignment(db: Session, a: m.TeachingAssignment) -> None:
 
 router.include_router(build_crud_router(
     model=m.Subject, create_schema=s.SubjectCreate, update_schema=s.SubjectUpdate,
-    read_schema=s.SubjectRead, prefix="/subjects", tag="Dersler", filters=("department_id",),
+    read_schema=s.SubjectRead, prefix="/subjects", tag="Dersler", filters=("department_id",), scope=sc.SUBJECT,
 ))
 router.include_router(build_crud_router(
     model=m.Stream, create_schema=s.StreamCreate, update_schema=s.StreamUpdate,
-    read_schema=s.StreamRead, prefix="/streams", tag="Potoklar", apply=apply_stream,
+    read_schema=s.StreamRead, prefix="/streams", tag="Potoklar", apply=apply_stream, scope=sc.STREAM,
 ))
 router.include_router(build_crud_router(
     model=m.CurriculumItem, create_schema=s.CurriculumItemCreate, update_schema=s.CurriculumItemUpdate,
     read_schema=s.CurriculumItemRead, prefix="/curriculum", tag="Okuw meýilnamasy",
     filters=("group_id", "stream_id", "subject_id"), search_field=None, order_by=("id",),
-    validate=validate_curriculum_item,
+    validate=validate_curriculum_item, scope=sc.CURRICULUM,
 ))
 router.include_router(build_crud_router(
     model=m.TeachingAssignment, create_schema=s.TeachingAssignmentCreate,
     update_schema=s.TeachingAssignmentUpdate, read_schema=s.TeachingAssignmentRead,
     prefix="/assignments", tag="Mugallym bellemek", filters=("curriculum_item_id", "teacher_id"),
-    search_field=None, order_by=("id",), validate=validate_assignment,
+    search_field=None, order_by=("id",), validate=validate_assignment, scope=sc.ASSIGNMENT,
 ))

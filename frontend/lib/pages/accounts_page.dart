@@ -52,6 +52,36 @@ class _AccountsPageState extends State<AccountsPage> {
     }
   }
 
+  /// Fakultet saýlap dekan hasabyny açmak (bar bolsa täze wagtlaýyn parol).
+  Future<void> _createDean() async {
+    final faculties = await Api.instance.list('faculties');
+    if (!mounted) return;
+    final f = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Dekan hasaby: fakulteti saýlaň'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text('Dekan diňe öz fakultetiniň toparlaryny, okuw meýilnamasyny, mugallymlaryny we talyplaryny '
+                'görýär we girizýär. Raspisaniýäni okuw bölümi düzýär.',
+                style: TextStyle(color: AppColors.textMuted)),
+          ),
+          for (final f in faculties)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, f), child: Text('${f['name']}')),
+        ],
+      ),
+    );
+    if (f == null) return;
+    try {
+      final issued = await Api.instance.post('users/deans', {'faculty_id': f['id']}) as Map<String, dynamic>;
+      await _load();
+      if (mounted) await _showIssued([issued]);
+    } on ApiException catch (e) {
+      if (mounted) showError(context, e.message);
+    }
+  }
+
   Future<void> _reset(Map<String, dynamic> user) async {
     if (!await confirm(context, '"${user['username']}" üçin täze wagtlaýyn parol döredilsinmi?')) return;
     try {
@@ -66,7 +96,7 @@ class _AccountsPageState extends State<AccountsPage> {
   Future<void> _showIssued(List<Map<String, dynamic>> issued) {
     final text = [
       'Mugallym\tLogin\tParol',
-      for (final i in issued) '${i['teacher']?['name'] ?? ''}\t${i['username']}\t${i['password']}',
+      for (final i in issued) '${i['teacher']?['name'] ?? i['faculty']?['name'] ?? ''}\t${i['username']}\t${i['password']}',
     ].join('\n');
     return showDialog(
       context: context,
@@ -88,7 +118,7 @@ class _AccountsPageState extends State<AccountsPage> {
                 ], rows: [
                   for (final i in issued)
                     DataRow(cells: [
-                      DataCell(Text('${i['teacher']?['name'] ?? ''}')),
+                      DataCell(Text('${i['teacher']?['name'] ?? (i['faculty'] != null ? 'Dekan: ${i['faculty']['name']}' : '')}')),
                       DataCell(SelectableText('${i['username']}')),
                       DataCell(SelectableText('${i['password']}', style: const TextStyle(fontFamily: 'monospace'))),
                     ]),
@@ -130,6 +160,12 @@ class _AccountsPageState extends State<AccountsPage> {
             ),
           ),
           const SizedBox(width: 12),
+          OutlinedButton.icon(
+            onPressed: _createDean,
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            label: const Text('Dekan hasaby'),
+          ),
+          const SizedBox(width: 12),
           FilledButton.icon(
             onPressed: _teachersWithout == 0 ? null : _createAll,
             icon: const Icon(Icons.person_add),
@@ -138,7 +174,8 @@ class _AccountsPageState extends State<AccountsPage> {
         ]),
         const SizedBox(height: 8),
         const Text('Mugallym telefonda öz login/paroly bilen girip, diňe öz raspisaniýesini görýär '
-            '(diňe "Mugallymlara çap et" edilen raspisaniýe).'),
+            '(diňe "Mugallymlara çap et" edilen raspisaniýe). Dekan şu sahypa girip, diňe öz fakultetiniň '
+            'maglumatlaryny girizýär.'),
         const SizedBox(height: 16),
         Expanded(
           child: _loading
@@ -150,7 +187,7 @@ class _AccountsPageState extends State<AccountsPage> {
                       width: double.infinity,
                       child: DataTable(columns: const [
                         DataColumn(label: Text('Login')),
-                        DataColumn(label: Text('Mugallym')),
+                        DataColumn(label: Text('Mugallym / fakultet')),
                         DataColumn(label: Text('Roly')),
                         DataColumn(label: Text('Ýagdaýy')),
                         DataColumn(label: Text('')),
@@ -158,8 +195,12 @@ class _AccountsPageState extends State<AccountsPage> {
                         for (final u in rows)
                           DataRow(cells: [
                             DataCell(SelectableText('${u['username']}')),
-                            DataCell(Text('${u['teacher']?['name'] ?? '—'}')),
-                            DataCell(Text(u['role'] == 'admin' ? 'Admin' : 'Mugallym')),
+                            DataCell(Text('${u['teacher']?['name'] ?? u['faculty']?['name'] ?? '—'}')),
+                            DataCell(Text(switch (u['role']) {
+                              'admin' => 'Admin',
+                              'dean' => 'Dekan',
+                              _ => 'Mugallym',
+                            })),
                             DataCell(Text(u['must_change_password'] == true
                                 ? 'Heniz girmedi (wagtlaýyn parol)'
                                 : 'Öz paroly bar')),

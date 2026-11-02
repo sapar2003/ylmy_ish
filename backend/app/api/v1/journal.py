@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app import models as m
-from app.api.auth import CurrentUser, TeacherUser, require_admin
-from app.api.crud import DbSession, build_crud_router, get_or_404
+from app.api import scope as sc
+from app.api.auth import CurrentUser, FacultyScope, TeacherUser, require_admin, require_staff
+from app.api.crud import DbSession, build_crud_router, check_owner, get_or_404
 from app.schemas.structure import ReadBase
 from app.services import journal as j
 from app.services.students import create_demo_students
@@ -43,10 +44,10 @@ def _validate_student(db, st: m.Student) -> None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kiçi topar talybyň toparyna degişli däl.")
 
 
-students_router = APIRouter(prefix="/students", tags=["Talyplar"], dependencies=[Depends(require_admin)])
+students_router = APIRouter(prefix="/students", tags=["Talyplar"], dependencies=[Depends(require_staff)])
 
 
-@students_router.post("/demo")
+@students_router.post("/demo", dependencies=[Depends(require_admin)])
 def create_demo(db: DbSession):
     """Talyby ýok toparlara synag talyplaryny (türkmen atlary bilen) döredýär."""
     return {"created": create_demo_students(db)}
@@ -55,7 +56,7 @@ def create_demo(db: DbSession):
 router.include_router(build_crud_router(
     model=m.Student, create_schema=StudentCreate, update_schema=StudentUpdate, read_schema=StudentRead,
     prefix="/students", tag="Talyplar", filters=("group_id", "subgroup_id"), search_field="full_name",
-    order_by=("group_id", "full_name"), validate=_validate_student, router=students_router,
+    order_by=("group_id", "full_name"), validate=_validate_student, router=students_router, scope=sc.STUDENT,
 ))
 
 
@@ -156,12 +157,14 @@ def my_journal(assignment_id: int, user: TeacherUser, db: DbSession):
 router.include_router(me)
 
 # --- admin: ähli žurnallar ---
-admin = APIRouter(prefix="/journal", tags=["Žurnal"], dependencies=[Depends(require_admin)])
+admin = APIRouter(prefix="/journal", tags=["Žurnal"], dependencies=[Depends(require_staff)])  # dekan: öz fakulteti
 
 
 @admin.get("/courses")
-def group_courses(group_id: int, db: DbSession):
+def group_courses(group_id: int, db: DbSession, fid: FacultyScope):
     """Toparyň çap edilen raspisaniýedäki sapaklary (potok sapaklary bilen)."""
+    if fid is not None and sc.group_faculty(db, group_id) != fid:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_YOURS)
     tt = j.published_timetable(db)
     if tt is None:
         return []
@@ -176,11 +179,13 @@ def group_courses(group_id: int, db: DbSession):
 
 
 @admin.get("/{assignment_id}")
-def admin_journal(assignment_id: int, db: DbSession):
+def admin_journal(assignment_id: int, db: DbSession, fid: FacultyScope):
+    a = get_or_404(db, m.TeachingAssignment, assignment_id, "Sapak")
+    check_owner(sc.ASSIGNMENT, db, a, fid)
     tt = j.published_timetable(db)
     if tt is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Çap edilen raspisaniýe ýok.")
-    return j.gradebook(db, tt, get_or_404(db, m.TeachingAssignment, assignment_id, "Sapak"))
+    return j.gradebook(db, tt, a)
 
 
 class AdminMarkIn(BaseModel):
@@ -191,8 +196,9 @@ class AdminMarkIn(BaseModel):
 
 
 @admin.put("/{assignment_id}")
-def admin_set_mark(assignment_id: int, payload: AdminMarkIn, user: CurrentUser, db: DbSession):
-    """Admin (okuw bölümi) islendik güne baha goýup ýa-da düzedip bilýär."""
+def admin_set_mark(assignment_id: int, payload: AdminMarkIn, user: CurrentUser, db: DbSession, fid: FacultyScope):
+    """Admin (okuw bölümi) we dekan (öz fakulteti) islendik güne baha goýup ýa-da düzedip bilýär."""
+    check_owner(sc.ASSIGNMENT, db, get_or_404(db, m.TeachingAssignment, assignment_id, "Sapak"), fid)
     tt = j.published_timetable(db)
     entry = db.scalar(select(m.TimetableEntry).where(
         m.TimetableEntry.timetable_id == tt.id, m.TimetableEntry.assignment_id == assignment_id,

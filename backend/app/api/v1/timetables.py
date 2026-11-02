@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app import models as m
 from app import solver as sv
+from app.api.auth import FacultyScope, require_admin
 from app.api.crud import DbSession, get_or_404
+from app.api.scope import faculty_groups
 from app.core.config import settings
 from app.db.session import get_session_factory
 from app.schemas import timetable as s
@@ -30,7 +32,7 @@ def _read(db: Session, tt: m.Timetable) -> s.TimetableRead:
     return s.TimetableRead.model_validate(tt).model_copy(update={"entry_count": count})
 
 
-@router.get("/precheck", response_model=s.PrecheckRead)
+@router.get("/precheck", response_model=s.PrecheckRead, dependencies=[Depends(require_admin)])
 def run_precheck(db: DbSession, weeks: int = Query(1, ge=1, le=2, description="2: iki hepdelik raspisaniýe")):
     """Raspisaniýe düzmezden öň maglumatlary barlaýar (solweri işletmeýär)."""
     inp, warnings = build_input(db, 0, weeks)
@@ -41,7 +43,8 @@ def run_precheck(db: DbSession, weeks: int = Query(1, ge=1, le=2, description="2
     )
 
 
-@router.post("", response_model=s.TimetableRead, status_code=status.HTTP_202_ACCEPTED)
+@router.post("", response_model=s.TimetableRead, status_code=status.HTTP_202_ACCEPTED,
+             dependencies=[Depends(require_admin)])
 def create_timetable(
     payload: s.TimetableCreate,
     db: DbSession,
@@ -66,7 +69,7 @@ def get_timetable(timetable_id: int, db: DbSession):
     return _read(db, get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe"))
 
 
-@router.delete("/{timetable_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{timetable_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_timetable(timetable_id: int, db: DbSession):
     db.delete(get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe"))
     db.commit()
@@ -82,6 +85,7 @@ def list_entries(
     room_id: int | None = None,
     week: int | None = Query(None, ge=1, le=2, description="Diňe şu hepdäniň sapaklary (her hepdekiler bilen)"),
     on: date | None = Query(None, description="Bu senäniň hepdesi: 1-nji ýa 2-nji hepdäni özi kesgitleýär"),
+    fid: FacultyScope = None,
 ):
     tt = get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe")
     if on is not None:
@@ -99,10 +103,13 @@ def list_entries(
     subjects, teachers, rooms = names(m.Subject), names(m.Teacher), names(m.Room)
     groups, subgroups, streams = names(m.Group), names(m.Subgroup), names(m.Stream)
 
+    own = set(db.scalars(faculty_groups(fid))) if fid is not None else None  # dekan: diňe öz toparlary
     out = []
     for entry, a, item, slot in rows:
         stream = streams.get(item.stream_id) if item.stream_id else None
         group_ids = [g.id for g in stream.groups] if stream else [item.group_id]
+        if own is not None and own.isdisjoint(group_ids):
+            continue
         if group_id is not None and group_id not in group_ids:
             continue
         if teacher_id is not None and a.teacher_id != teacher_id:

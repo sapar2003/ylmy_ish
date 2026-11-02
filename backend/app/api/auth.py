@@ -1,4 +1,4 @@
-"""Kim girýär we näme edip bilýär: tokenden ulanyjy, admin we mugallym barlaglary."""
+"""Kim girýär we näme edip bilýär: tokenden ulanyjy, admin, dekan we mugallym barlaglary."""
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, status
@@ -32,6 +32,23 @@ def require_admin(user: CurrentUser) -> m.User:
     if user.role != m.Role.admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Bu diňe admin üçin.")
     return user
+
+
+def require_staff(user: CurrentUser) -> m.User:
+    """Admin ýa-da dekan: maglumatlary girizýänler (dekan diňe öz fakultetiniňkini, `faculty_scope`)."""
+    if user.role == m.Role.dean and user.faculty_id is not None:
+        return user
+    if user.role != m.Role.admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bu diňe admin we dekan üçin.")
+    return user
+
+
+def faculty_scope(user: Annotated[m.User | None, Depends(require_staff)]) -> int | None:
+    """Dekanyň fakulteti; admin üçin None (ähli fakultetler)."""
+    return user.faculty_id if user is not None and user.role == m.Role.dean else None
+
+
+FacultyScope = Annotated[int | None, Depends(faculty_scope)]
 
 
 def require_teacher(user: CurrentUser) -> m.User:

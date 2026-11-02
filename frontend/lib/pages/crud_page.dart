@@ -19,10 +19,14 @@ class _CrudPageState extends State<CrudPage> {
   static const _pageSize = 25;
   static const _common = -1; // fakulteti görkezilmedik (umumy)
 
+  /// Umumy sanawlary (fakultetler, smenalar, binalar, ...) diňe okuw bölümi üýtgedýär; dekan görýär.
+  static const _shared = {'faculties', 'shifts', 'buildings', 'room-types', 'exam-sessions', 'exam-periods'};
+  bool get _readOnly => Api.instance.isDean && _shared.contains(spec.endpoint);
+
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _refs = {};
   String _query = '';
-  int? _faculty; // null: hemmesi
+  int? _faculty = Api.instance.deanFaculty; // null: hemmesi; dekan: adaty öz fakulteti
   int? _sortColumn;
   bool _sortAsc = true;
   int _page = 0;
@@ -166,11 +170,12 @@ class _CrudPageState extends State<CrudPage> {
             ),
           ),
           const SizedBox(width: 16),
-          FilledButton.icon(
-            onPressed: () => _edit(),
-            icon: const Icon(Icons.add, size: 18),
-            label: Text('${spec.singular} goş'),
-          ),
+          if (!_readOnly)
+            FilledButton.icon(
+              onPressed: () => _edit(),
+              icon: const Icon(Icons.add, size: 18),
+              label: Text('${spec.singular} goş'),
+            ),
         ]),
         if (spec.description != null) ...[const SizedBox(height: 16), HelpNote(spec.description!)],
         const SizedBox(height: 16),
@@ -311,7 +316,7 @@ class _CrudPageState extends State<CrudPage> {
                                       label: Text(actionLabel(a), style: const TextStyle(fontSize: 13)),
                                     ),
                                   ),
-                                PopupMenuButton<String>(
+                                if (!_readOnly) PopupMenuButton<String>(
                                   tooltip: 'Hereketler',
                                   icon: const Icon(Icons.more_horiz, color: AppColors.textMuted),
                                   onSelected: (v) => v == 'edit' ? _edit(item) : _delete(item),

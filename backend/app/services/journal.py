@@ -58,8 +58,8 @@ def deadline(day: date) -> date:
 
 
 def editable(user: m.User, day: date, today: date | None = None) -> bool:
-    """Admin islendik wagt; mugallym — sapak güni we ondan soň EDIT_DAYS günüň dowamynda."""
-    if user.role == m.Role.admin:
+    """Admin we dekan islendik wagt; mugallym — sapak güni we ondan soň EDIT_DAYS günüň dowamynda."""
+    if user.role in (m.Role.admin, m.Role.dean):
         return True
     today = today or date.today()
     return day <= today <= deadline(day)

@@ -3,6 +3,7 @@
 Täze sanaw goşmak = model + schema + `build_crud_router(...)` bilen bir setir.
 """
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -53,6 +54,30 @@ def get_or_404(db: Session, model: type[Base], item_id: int, label: str) -> Any:
     return obj
 
 
+@dataclass(frozen=True)
+class Scope:
+    """Dekan üçin çäkler: `owner(db, obj)` — ýazgynyň fakulteti (None: umumy, diňe admin üýtgedýär);
+    `visible(faculty_id)` — dekanyň görýän ýazgylarynyň SQL şerti (None: hemmesi görünýär)."""
+
+    owner: Callable[[Session, Any], int | None] = lambda db, obj: None
+    visible: Callable[[int], Any] | None = None
+
+
+GLOBAL = Scope()  # umumy sanawlar (smenalar, binalar, ...): dekan diňe görýär
+
+NOT_YOURS = "Bu başga fakultetiň ýa-da umumy maglumat: diňe görüp bilersiňiz."
+
+
+def check_owner(scope: Scope, db: Session, obj: Any, faculty_id: int | None) -> None:
+    """Dekan diňe öz fakultetiniň ýazgysyny üýtgedip bilýär (admin üçin `faculty_id` None)."""
+    if faculty_id is None:
+        return
+    with db.no_autoflush:
+        owner = scope.owner(db, obj)
+    if owner != faculty_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_YOURS)
+
+
 def build_crud_router(
     *,
     model: type[Base],
@@ -67,12 +92,15 @@ def build_crud_router(
     router: APIRouter | None = None,
     apply: Callable[[Session, Any, dict[str, Any]], None] | None = None,
     validate: Callable[[Session, Any], None] | None = None,
+    scope: Scope = GLOBAL,
 ) -> APIRouter:
     """`router` berilse, CRUD şol routere goşulýar (goşmaça endpointler bilen birlikde).
 
     `apply(db, obj, data)` maglumaty obýekte geçirýär (meselem, id sanawyny baglanyşyga öwürmek);
     `validate(db, obj)` ýatda saklamazdan öň barlaýar we ýalňyşlykda HTTPException atýar.
+    `scope` dekanyň näme görýändigini we näme üýtgedip bilýändigini kesgitleýär.
     """
+    from app.api.auth import FacultyScope  # auth bu modula bagly: aýlawly importdan gaça durmak
 
     def apply_data(db: Session, obj: Any, data: dict[str, Any]) -> None:
         if apply:
@@ -92,8 +120,12 @@ def build_crud_router(
     router = router or APIRouter(prefix=prefix, tags=[tag])
     commit = commit_or_raise
 
-    def get_item_or_404(db: Session, item_id: int) -> Any:
-        return get_or_404(db, model, item_id, tag)
+    def get_item_or_404(db: Session, item_id: int, faculty_id: int | None = None) -> Any:
+        obj = get_or_404(db, model, item_id, tag)
+        if faculty_id is not None and scope.visible is not None and db.scalar(
+                select(model.id).where(model.id == item_id, scope.visible(faculty_id))) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"{tag}: id={item_id} tapylmady.")
+        return obj
 
     # Süzgüçler (meselem ?faculty_id=3) query model hökmünde yglan edilýär, OpenAPI-de görünýär.
     filter_model = create_model(
@@ -105,8 +137,10 @@ def build_crud_router(
     )
 
     @router.get("", response_model=Page[read_schema])
-    def list_items(db: DbSession, params: Annotated[filter_model, Query()]):  # type: ignore[valid-type]
+    def list_items(db: DbSession, params: Annotated[filter_model, Query()], fid: FacultyScope):  # type: ignore[valid-type]
         stmt = select(model)
+        if fid is not None and scope.visible is not None:
+            stmt = stmt.where(scope.visible(fid))
         if search_field and params.q:
             stmt = stmt.where(getattr(model, search_field).ilike(f"%{params.q}%"))
         for field in filters:
@@ -124,24 +158,29 @@ def build_crud_router(
         )
 
     @router.post("", response_model=read_schema, status_code=status.HTTP_201_CREATED)
-    def create_item(payload: create_schema, db: DbSession):  # type: ignore[valid-type]
+    def create_item(payload: create_schema, db: DbSession, fid: FacultyScope):  # type: ignore[valid-type]
         obj = model()
         apply_data(db, obj, payload.model_dump())
+        check_owner(scope, db, obj, fid)
         return save(db, obj)
 
     @router.get("/{item_id}", response_model=read_schema)
-    def get_item(item_id: int, db: DbSession):
-        return get_item_or_404(db, item_id)
+    def get_item(item_id: int, db: DbSession, fid: FacultyScope):
+        return get_item_or_404(db, item_id, fid)
 
     @router.patch("/{item_id}", response_model=read_schema)
-    def update_item(item_id: int, payload: update_schema, db: DbSession):  # type: ignore[valid-type]
-        obj = get_item_or_404(db, item_id)
+    def update_item(item_id: int, payload: update_schema, db: DbSession, fid: FacultyScope):  # type: ignore[valid-type]
+        obj = get_item_or_404(db, item_id, fid)
+        check_owner(scope, db, obj, fid)
         apply_data(db, obj, payload.model_dump(exclude_unset=True))
+        check_owner(scope, db, obj, fid)  # başga fakultete geçirip bolmaýar
         return save(db, obj)
 
     @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-    def delete_item(item_id: int, db: DbSession):
-        db.delete(get_item_or_404(db, item_id))
+    def delete_item(item_id: int, db: DbSession, fid: FacultyScope):
+        obj = get_item_or_404(db, item_id, fid)
+        check_owner(scope, db, obj, fid)
+        db.delete(obj)
         commit(db, deleting=True)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 

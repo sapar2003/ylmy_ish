@@ -48,6 +48,25 @@ def create_teacher_accounts(db: Session, teacher_ids: list[int] | None) -> list[
     return issued
 
 
+def create_dean_account(db: Session, faculty: m.Faculty) -> tuple[m.User, str]:
+    """Fakultetiň dekan hasaby ("dekan.stkf"); bar bolsa täze wagtlaýyn parol berilýär."""
+    user = db.scalar(select(m.User).where(m.User.role == m.Role.dean, m.User.faculty_id == faculty.id))
+    if user is not None:
+        return user, reset_password(db, user)
+    label = faculty.short_name or faculty.code or f"f{faculty.id}"
+    base = "dekan." + (re.sub(r"[^a-z0-9]", "", label.lower().translate(_LATIN)) or f"f{faculty.id}")
+    taken = set(db.scalars(select(m.User.username)))
+    name, n = base, 2
+    while name in taken:
+        name, n = f"{base}{n}", n + 1
+    password = new_password()
+    user = m.User(username=name, password_hash=hash_password(password), role=m.Role.dean, faculty_id=faculty.id,
+                  must_change_password=True, active=True)
+    db.add(user)
+    db.commit()
+    return user, password
+
+
 def reset_password(db: Session, user: m.User) -> str:
     password = new_password()
     user.password_hash = hash_password(password)

@@ -76,14 +76,28 @@ class _HomePageState extends State<HomePage> {
   String _page = 'home';
   bool _collapsed = false;
   String _username = 'admin';
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
     Api.instance.get('auth/me').then((me) {
-      if (mounted) setState(() => _username = '${me['username']}');
-    }).catchError((_) {});
+      Api.instance.me = me as Map<String, dynamic>;
+      if (mounted) {
+        setState(() {
+          _username = '${me['username']}';
+          _ready = true;
+        });
+      }
+    }).catchError((_) {
+      if (mounted) setState(() => _ready = true);
+    });
   }
+
+  /// Dekana görkezilmeýän bölümler (diňe okuw bölümi üçin).
+  static const _adminOnly = {'accounts'};
+
+  bool _visible(NavEntry e) => !(Api.instance.isDean && _adminOnly.contains(e.key));
 
   void _open(String key) => setState(() => _page = key);
 
@@ -98,6 +112,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final narrow = MediaQuery.sizeOf(context).width < 1100;
     final collapsed = _collapsed || narrow;
     return Scaffold(
@@ -116,7 +131,8 @@ class _HomePageState extends State<HomePage> {
               child: ListView(padding: const EdgeInsets.fromLTRB(10, 8, 10, 8), children: [
                 for (final g in navGroups) ...[
                   if (g.title != null) _groupTitle(g.title!, collapsed),
-                  for (final e in g.entries) _navItem(e, collapsed),
+                  for (final e in g.entries)
+                    if (_visible(e)) _navItem(e, collapsed),
                 ],
               ]),
             ),
@@ -236,7 +252,8 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(_username, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                const Text('Administrator', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                Text(Api.instance.isDean ? 'Dekan · ${Api.instance.me?['faculty']?['name'] ?? ''}' : 'Administrator',
+                    overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
               ]),
             ),
             const Icon(Icons.unfold_more, size: 18, color: AppColors.textMuted),

@@ -6,7 +6,9 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from app import models as m
-from app.api.crud import DbSession, get_or_404
+from app.api.auth import FacultyScope
+from app.api.crud import NOT_YOURS, DbSession, get_or_404
+from app.api.scope import faculty_groups
 from app.services.docx_export import DocOptions, exam_docx, timetable_docx
 from app.services.exams import exam_days
 
@@ -27,7 +29,7 @@ class DocQuery(BaseModel):
     office_head: str = DocOptions.office_head
 
 
-def _pages(q: DocQuery) -> list[list[int]]:
+def _pages(q: DocQuery, db=None, fid: int | None = None) -> list[list[int]]:
     try:
         pages = [[int(x) for x in page.split(",") if x.strip()] for page in q.page]
     except ValueError:
@@ -35,6 +37,8 @@ def _pages(q: DocQuery) -> list[list[int]]:
     pages = [pg for pg in pages if pg]
     if not pages:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Iň az bir topar saýlaň.")
+    if fid is not None and not {g for pg in pages for g in pg} <= set(db.scalars(faculty_groups(fid))):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_YOURS)  # dekan diňe öz toparlaryny
     return pages
 
 
@@ -49,24 +53,24 @@ def _file(content: bytes, name: str) -> Response:
 
 
 @router.get("/timetables/{timetable_id}/docx")
-def timetable_word(timetable_id: int, db: DbSession, q: Annotated[DocQuery, Query()]):
+def timetable_word(timetable_id: int, db: DbSession, q: Annotated[DocQuery, Query()], fid: FacultyScope):
     """Hepdelik raspisaniýe: her `page` aýry sahypa ("OKUW SAPAKLARYNYŇ TERTIBI")."""
     tt = get_or_404(db, m.Timetable, timetable_id, "Raspisaniýe")
     if tt.status != m.TimetableStatus.done:
         raise HTTPException(status.HTTP_409_CONFLICT, "Raspisaniýe heniz taýýar däl.")
-    pages = _pages(q)
+    pages = _pages(q, db, fid)
     names = {g.id: g.name for g in db.query(m.Group).filter(m.Group.id.in_({g for pg in pages for g in pg}))}
     title = "Raspisaniýe " + "; ".join(", ".join(names.get(g, "") for g in pg) for pg in pages[:3])
     return _file(timetable_docx(db, tt, pages, _options(q)), title[:120])
 
 
 @router.get("/exam-schedules/{schedule_id}/docx")
-def exam_word(schedule_id: int, db: DbSession, q: Annotated[DocQuery, Query()]):
+def exam_word(schedule_id: int, db: DbSession, q: Annotated[DocQuery, Query()], fid: FacultyScope):
     """Synag raspisaniýesi: her `page` aýry sahypa ("ARA SYNAGLARYŇ GÜN TERTIBI")."""
     sch = get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
     if sch.status != m.TimetableStatus.done:
         raise HTTPException(status.HTTP_409_CONFLICT, "Synag raspisaniýesi heniz taýýar däl.")
-    pages = _pages(q)
+    pages = _pages(q, db, fid)
     session = db.get(m.ExamSession, sch.session_id)
     names = {g.id: g.name for g in db.query(m.Group).filter(m.Group.id.in_({g for pg in pages for g in pg}))}
     title = "Synag " + "; ".join(", ".join(names.get(g, "") for g in pg) for pg in pages[:3])

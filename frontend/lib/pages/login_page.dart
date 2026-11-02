@@ -26,8 +26,8 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final r = await Api.instance.post('auth/login', {'username': _user.text.trim(), 'password': _pass.text})
           as Map<String, dynamic>;
-      if (r['role'] != 'admin') {
-        throw ApiException('Bu sahypa diňe admin üçin. Mugallymlar telefon programmasyny ulanýar.');
+      if (r['role'] != 'admin' && r['role'] != 'dean') {
+        throw ApiException('Bu sahypa okuw bölümi we dekanlar üçin. Mugallymlar telefon programmasyny ulanýar.');
       }
       if (r['must_change_password'] == true && mounted) {
         Api.instance.setToken(r['token'] as String);
