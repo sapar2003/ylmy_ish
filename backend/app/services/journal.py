@@ -71,7 +71,16 @@ def students(db: Session, les_or_assignment, group_ids: list[int] | None = None)
     gids = les_or_assignment.group_ids if isinstance(les_or_assignment, Lesson) else group_ids
     stmt = select(m.Student).join(m.Group, m.Group.id == m.Student.group_id).where(m.Student.active.is_(True))
     stmt = stmt.where(m.Student.subgroup_id == a.subgroup_id) if a.subgroup_id else stmt.where(m.Student.group_id.in_(gids))
-    return list(db.scalars(stmt.order_by(m.Group.name, m.Student.full_name)))
+    groups = {g.id: g.name for g in db.scalars(select(m.Group))}
+    return sorted(db.scalars(stmt), key=lambda s: (groups.get(s.group_id, ""), tk_key(s.full_name)))
+
+
+TK_ALPHABET = "abçdeäfghijžklmnňoöprsştuüwyýz"  # türkmen elipbiýiniň tertibi
+
+
+def tk_key(text: str) -> list[int]:
+    """Türkmen elipbiýi boýunça tertiplemek üçin (Ç - B-den soň, Ä - E-den soň, Ö - O-dan soň)."""
+    return [TK_ALPHABET.find(ch) if ch in TK_ALPHABET else 100 + ord(ch) for ch in text.lower()]
 
 
 def save_marks(db: Session, user: m.User, les: Lesson, day: date, values: dict[int, str | None]) -> int:
