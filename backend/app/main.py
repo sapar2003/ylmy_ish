@@ -17,6 +17,16 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.middleware("http")
+async def no_stale_ui(request, call_next):
+    """Brauzer köne UI faýllaryny ýatda saklamasyn: täze wersiýa goýlanda sahypa täzelenende görünýär
+    (ETag bilen barlanýar, üýtgemedik faýl gaýtadan ýüklenmeýär)."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 @app.get("/health", tags=["Ulgam"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
