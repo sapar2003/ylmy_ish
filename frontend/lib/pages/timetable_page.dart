@@ -54,7 +54,7 @@ class _TimetablePageState extends State<TimetablePage> {
         Api.instance.list('rooms'),
         Api.instance.list('time-slots'),
       ]);
-      final faculties = await loadTeacherFaculties(r[2] as List<Map<String, dynamic>>);
+      final faculties = await loadTeacherFaculties();
       if (!mounted) return;
       setState(() {
         _timetables = (r[0] as List).cast<Map<String, dynamic>>();

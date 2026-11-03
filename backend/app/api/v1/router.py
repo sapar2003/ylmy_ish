@@ -14,7 +14,7 @@ api_router = APIRouter(prefix="/api/v1")
 admin_router = APIRouter(dependencies=[Depends(require_staff)])
 admin_router.include_router(build_crud_router(
     model=m.Faculty, create_schema=s.FacultyCreate, update_schema=s.FacultyUpdate,
-    read_schema=s.FacultyRead, prefix="/faculties", tag="Fakultetler",
+    read_schema=s.FacultyRead, prefix="/faculties", tag="Fakultetler", scope=sc.FACULTY,
 ))
 admin_router.include_router(build_crud_router(
     model=m.Department, create_schema=s.DepartmentCreate, update_schema=s.DepartmentUpdate,

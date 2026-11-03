@@ -1,15 +1,14 @@
 import 'api.dart';
 
-/// Mugallym id -> fakultetiniň gysga ady (kafedrasy arkaly), raspisaniýe kartlarynda görkezmek üçin.
-Future<Map<int, String>> loadTeacherFaculties(List<Map<String, dynamic>> teachers) async {
-  final r = await Future.wait([Api.instance.list('departments'), Api.instance.list('faculties')]);
-  final faculty = {for (final f in r[1]) f['id'] as int: '${f['short_name'] ?? f['name']}'};
-  final facultyOfDepartment = {for (final d in r[0]) d['id'] as int: faculty[d['faculty_id']]};
-  return {
-    for (final t in teachers)
-      if (facultyOfDepartment[t['department_id']] != null) t['id'] as int: facultyOfDepartment[t['department_id']]!,
-  };
-}
+/// Ähli mugallymlar (başga fakultetlerden hem) — sapaga bellemek üçin saýlaw sanawy: id, ady, fakulteti.
+Future<List<Map<String, dynamic>>> loadTeacherChoices() async =>
+    ((await Api.instance.get('teachers/choices')) as List).cast<Map<String, dynamic>>();
+
+/// Mugallym id -> fakultetiniň gysga ady, raspisaniýe kartlarynda görkezmek üçin.
+Future<Map<int, String>> loadTeacherFaculties() async => {
+      for (final t in await loadTeacherChoices())
+        if (t['faculty'] != null) t['id'] as int: '${t['faculty']}',
+    };
 
 /// "Ady Familiýasy (STKF)"; fakulteti näbelli bolsa diňe at.
 String withFaculty(Map<String, dynamic> teacherRef, Map<int, String> faculties) {

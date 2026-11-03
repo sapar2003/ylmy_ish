@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
 import '../theme.dart';
 import 'dialogs.dart';
@@ -26,9 +27,7 @@ class _CrudPageState extends State<CrudPage> {
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _refs = {};
   String _query = '';
-  // null: hemmesi. Dekan: fakultet süzgüji bolan sahypalarda (mugallymlar, otaglar) adaty öz fakulteti;
-  // galan sahypalary serwer eýýäm dekanyň fakulteti boýunça berýär.
-  late int? _faculty = spec.facultyFilter != null ? Api.instance.deanFaculty : null;
+  int? _faculty; // null: hemmesi (dekana serwer diňe öz fakultetiniňkini berýär)
   int? _sortColumn;
   bool _sortAsc = true;
   int _page = 0;
@@ -55,7 +54,7 @@ class _CrudPageState extends State<CrudPage> {
       };
       final results = await Future.wait([
         Api.instance.list(spec.endpoint),
-        for (final r in refNames) Api.instance.list(r),
+        for (final r in refNames) r == 'teachers' ? loadTeacherChoices() : Api.instance.list(r),
       ]);
       if (!mounted) return;
       setState(() {

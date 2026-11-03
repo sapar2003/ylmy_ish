@@ -52,7 +52,7 @@ class _ExamPageState extends State<ExamPage> {
         Api.instance.list('teachers'),
         Api.instance.list('rooms'),
       ]);
-      final faculties = await loadTeacherFaculties(r[2]);
+      final faculties = await loadTeacherFaculties();
       if (!mounted) return;
       setState(() {
         _teacherFaculty = faculties;

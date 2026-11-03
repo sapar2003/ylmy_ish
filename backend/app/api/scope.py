@@ -1,8 +1,9 @@
 """Dekanyň çägi: her ýazgy haýsy fakultete degişli we dekan haýsy ýazgylary görýär.
 
 Fakultetiň eýeçiligi: kafedra → fakultet; hünär, mugallym, ders → kafedra; topar → hünär;
-kiçi topar, talyp → topar; potok, okuw meýilnamasy, synag → topar(lar). Başga fakultetiň mugallymlaryny,
-derslerini we otaglaryny dekan görýär (öz meýilnamasyna saýlamak üçin), ýöne üýtgedip bilmeýär.
+kiçi topar, talyp → topar; potok, okuw meýilnamasy, synag → topar(lar).
+Dekan sanawlarda diňe öz fakultetiniňkini görýär (otaglarda — umumy otaglar hem). Başga fakultetiň
+mugallymyny öz sapagyna bellemek üçin diňe saýlaw sanawy bar: `GET /teachers/choices`.
 """
 from typing import Any
 
@@ -57,16 +58,22 @@ def _of_groups(model):
     return lambda f: or_(model.group_id.in_(faculty_groups(f)), model.stream_id.in_(faculty_streams(f)))
 
 
-DEPARTMENT = Scope(owner=lambda db, o: o.faculty_id)  # ähli kafedralar görünýär (başga fakultetiň mugallymlary üçin)
+FACULTY = Scope(visible=lambda f: m.Faculty.id == f)
+DEPARTMENT = Scope(owner=lambda db, o: o.faculty_id, visible=lambda f: m.Department.faculty_id == f)
 SPECIALTY = Scope(owner=lambda db, o: department_faculty(db, o.department_id),
                   visible=lambda f: m.Specialty.department_id.in_(faculty_departments(f)))
 GROUP = Scope(owner=lambda db, o: department_faculty(db, getattr(db.get(m.Specialty, o.specialty_id), "department_id", None)),
               visible=lambda f: m.Group.id.in_(faculty_groups(f)))
 SUBGROUP = Scope(owner=lambda db, o: group_faculty(db, o.group_id), visible=lambda f: m.Subgroup.group_id.in_(faculty_groups(f)))
 STUDENT = Scope(owner=lambda db, o: group_faculty(db, o.group_id), visible=lambda f: m.Student.group_id.in_(faculty_groups(f)))
-TEACHER = Scope(owner=lambda db, o: department_faculty(db, o.department_id))
-SUBJECT = Scope(owner=lambda db, o: department_faculty(db, o.department_id))
-ROOM = Scope(owner=lambda db, o: o.faculty_id)
+TEACHER = Scope(owner=lambda db, o: department_faculty(db, o.department_id),
+                visible=lambda f: m.Teacher.department_id.in_(faculty_departments(f)))
+# Ders: öz kafedralarynyňky we öz meýilnamasynda/synaglarynda bolan (meselem, umumy kafedranyň dersi).
+SUBJECT = Scope(owner=lambda db, o: department_faculty(db, o.department_id),
+                visible=lambda f: or_(m.Subject.department_id.in_(faculty_departments(f)),
+                                      m.Subject.id.in_(select(m.CurriculumItem.subject_id).where(_of_groups(m.CurriculumItem)(f))),
+                                      m.Subject.id.in_(select(m.Exam.subject_id).where(_of_groups(m.Exam)(f)))))
+ROOM = Scope(owner=lambda db, o: o.faculty_id, visible=lambda f: or_(m.Room.faculty_id == f, m.Room.faculty_id.is_(None)))
 STREAM = Scope(owner=stream_faculty, visible=lambda f: m.Stream.id.in_(faculty_streams(f)))
 CURRICULUM = Scope(owner=item_faculty, visible=_of_groups(m.CurriculumItem))
 ASSIGNMENT = Scope(

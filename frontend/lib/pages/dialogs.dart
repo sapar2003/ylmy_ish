@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../faculties.dart';
 import '../resources.dart';
 
 Future<bool> confirm(BuildContext context, String text) async {
@@ -380,7 +381,7 @@ class _AssignmentsDialogState extends State<AssignmentsDialog> {
     final item = widget.item;
     final results = await Future.wait([
       Api.instance.list('assignments', {'curriculum_item_id': item['id']}),
-      Api.instance.list('teachers'),
+      loadTeacherChoices(), // başga fakultetiň mugallymyny hem belläp bolýar
       if (_split) Api.instance.list('subgroups', {'group_id': item['group_id']}),
     ]);
     if (!mounted) return;
@@ -418,7 +419,11 @@ class _AssignmentsDialogState extends State<AssignmentsDialog> {
         initialValue: current?['teacher_id'] as int?,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder(), isDense: true),
         items: [
-          for (final t in _teachers) DropdownMenuItem(value: t['id'] as int, child: Text('${t['name']}')),
+          for (final t in _teachers)
+            DropdownMenuItem(
+              value: t['id'] as int,
+              child: Text(t['faculty'] == null ? '${t['name']}' : '${t['name']} (${t['faculty']})'),
+            ),
         ],
         onChanged: (id) => id == null ? null : _setTeacher(subgroupId, id),
       ),

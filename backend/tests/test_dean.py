@@ -20,19 +20,26 @@ def test_dean_sees_and_edits_only_own_faculty(anon_client):
     dean, fac = _dean(c, admin, "IHT")
     other_dean, _ = _dean(c, admin, "YK")
 
-    # Görmek: diňe öz fakultetiniň hünärleri, toparlary, meýilnamasy (kafedralar hemmesi görünýär).
+    # Görmek: diňe öz fakultetiniň fakulteti, kafedralary, hünärleri, toparlary, mugallymlary, meýilnamasy.
     own_deps = {d["id"] for d in c.get("/api/v1/departments?limit=500", headers=admin).json()["items"]
                 if d["faculty_id"] == fac["id"]}
+    assert _ids(c, "faculties", dean) == {fac["id"]}
+    assert _ids(c, "departments", dean) == own_deps
     assert {s["department_id"] for s in c.get("/api/v1/specialties", headers=dean).json()["items"]} <= own_deps
-    foreign_dep = next(iter(_ids(c, "departments", dean) - own_deps))
-    assert c.patch(f"/api/v1/departments/{foreign_dep}", json={"name": "X"}, headers=dean).status_code == 403
+    foreign_dep = next(iter(_ids(c, "departments", admin) - own_deps))
+    assert c.patch(f"/api/v1/departments/{foreign_dep}", json={"name": "X"}, headers=dean).status_code == 404
+    rooms = c.get("/api/v1/rooms?limit=500", headers=dean).json()["items"]
+    assert all(r["faculty_id"] in (None, fac["id"]) for r in rooms)
     all_groups, own_groups = _ids(c, "groups", admin), _ids(c, "groups", dean)
     assert own_groups and own_groups < all_groups
     assert own_groups.isdisjoint(_ids(c, "groups", other_dean))
     own_items = c.get("/api/v1/curriculum?limit=500", headers=dean).json()["items"]
     assert own_items and len(own_items) < c.get("/api/v1/curriculum?limit=500", headers=admin).json()["total"]
-    # Mugallymlar we dersler: hemmesi görünýär (başga fakultetiň mugallymyny saýlamak üçin).
-    assert _ids(c, "teachers", dean) == _ids(c, "teachers", admin)
+    # Mugallymlar: sanawda diňe öz fakultetiniňkiler; başga fakultetiňkiler diňe saýlaw sanawynda.
+    own_teachers = _ids(c, "teachers", dean)
+    assert own_teachers and own_teachers < _ids(c, "teachers", admin)
+    choices = c.get("/api/v1/teachers/choices", headers=dean).json()
+    assert {t["id"] for t in choices} == _ids(c, "teachers", admin) and all("faculty" in t for t in choices)
 
     # Başga fakultetiň toparyny görmek we üýtgetmek bolmaýar.
     foreign_group = next(iter(all_groups - own_groups))
@@ -53,7 +60,7 @@ def test_dean_sees_and_edits_only_own_faculty(anon_client):
     teachers = c.get("/api/v1/teachers?limit=500", headers=admin).json()["items"]
     foreign_teacher = next(t for t in teachers if t["department_id"] not in own_deps)
     assert c.patch(f"/api/v1/teachers/{foreign_teacher['id']}", json={"position": "x"},
-                   headers=dean).status_code == 403
+                   headers=dean).status_code == 404
     assert c.put(f"/api/v1/teachers/{foreign_teacher['id']}/availability", json=[], headers=dean).status_code == 403
     item = next(i for i in own_items if not i["split"])
     existing = c.get(f"/api/v1/assignments?curriculum_item_id={item['id']}", headers=dean).json()["items"]

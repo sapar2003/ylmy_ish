@@ -13,6 +13,17 @@ router = APIRouter()
 teachers = APIRouter(prefix="/teachers", tags=["Mugallymlar"])
 
 
+@teachers.get("/choices")
+def teacher_choices(db: DbSession):
+    """Sapaga mugallym bellemek üçin ähli mugallymlar (başga fakultetlerden hem): diňe ady we fakulteti.
+    Dekan mugallymlar sanawynda diňe öz fakultetiniňkileri görýär, bu ýerde bolsa saýlap bilýär."""
+    deps = {d.id: d for d in db.scalars(select(m.Department))}
+    facs = {f.id: f.short_name or f.name for f in db.scalars(select(m.Faculty))}
+    return [{"id": t.id, "name": t.name, "department_id": t.department_id,
+             "faculty": facs.get(deps[t.department_id].faculty_id) if t.department_id in deps else None}
+            for t in db.scalars(select(m.Teacher).order_by(m.Teacher.name))]
+
+
 @teachers.get("/{teacher_id}/availability", response_model=list[s.AvailabilityItem])
 def get_availability(teacher_id: int, db: DbSession):
     """Diňe bellenen slotlar gaýtarylýar; galan slotlarda mugallym boş hasaplanýar."""
