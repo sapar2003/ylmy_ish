@@ -192,3 +192,31 @@ def test_subgroups_do_not_wait_for_each_other():
             by_day.setdefault(sid // 10, []).append(sid % 10)
         for day, nums in by_day.items():
             assert max(nums) - min(nums) + 1 == len(nums), (sg, day, sorted(nums))
+
+
+def _pairs_per_day(placements, week=None):
+    days = Counter()
+    for p in placements:
+        if p.week in (None, week):
+            days[p.slot_id // 10] += 1
+    return days
+
+
+def test_only_one_three_pair_day_per_week():
+    # 11 sapak, 5 gün × 3 jübüt: 4 gün 2 jübüt, diňe 1 gün 3 jübüt.
+    lessons = [lesson(f"s{k}", k + 1, [1], 1) for k in range(11)]
+    teachers = {k + 1: Teacher(k + 1, f"T{k}") for k in range(11)}
+    r = solve(base_input(lessons, teachers=teachers))
+    assert r.ok, r.issues
+    assert sorted(_pairs_per_day(r.placements).values()) == [2, 2, 2, 2, 3]
+
+
+def test_two_week_load_balanced_so_each_week_has_one_three_pair_day():
+    # Her hepde 10 sapak + iki hepdede bir geçýän 2 ders: her hepdä birden (11 + 11), ikisi bir hepdä däl (10 + 12).
+    weekly = [lesson(f"s{k}", k + 1, [1], 1) for k in range(10)]
+    bi = [dataclasses.replace(lesson(f"b{k}", 20 + k, [1], 0), biweekly=1) for k in range(2)]
+    teachers = {t: Teacher(t, f"T{t}") for t in [*range(1, 11), 20, 21]}
+    r = solve(dataclasses.replace(base_input(weekly + bi, teachers=teachers), weeks=2))
+    assert r.ok, r.issues
+    for w in (1, 2):
+        assert sorted(_pairs_per_day(r.placements, w).values()) == [2, 2, 2, 2, 3], w

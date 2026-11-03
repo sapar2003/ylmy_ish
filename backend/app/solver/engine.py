@@ -21,6 +21,8 @@ W_LATE = 1  # her sapak belgisi üçin: ir sapaklar gowy, gün gysga bolsun
 W_GAP = 50  # toparyň gününde sapaklaryň arasynda boş jübüt ("penjire")
 W_SINGLE_DAY = 40  # toparyň gününde diňe 1 jübüt
 W_EMPTY_DAY = 10  # toparyň sapaksyz güni (ýük azlygynda bolup biler, ýöne günlere paýlamak gowy)
+W_LONG_DAY = 15  # toparyň 3 (ýa-da köp) jübütli güni: adaty gün 2 jübüt
+W_EXTRA_LONG_DAY = 120  # hepdede ikinji, üçünji ... 3 jübütli gün (hepdede diňe bir gün 3 jübüt bolsun)
 
 STATUS_NAMES = {
     cp_model.OPTIMAL: "optimal",
@@ -69,7 +71,9 @@ def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, s
     """Talyplaryň gününiň görnüşi üçin ýumşak çäklendirmeler:
     - sapaklaryň arasynda boş jübüt bolmasyn (penjire), wagt boýunça (smenalar garyşsa hem);
     - günde iň az 2 jübüt bolsun: 1 jübütli gün güýçli jerimelenýär, boş gün az (ýük az bolsa
-      käbir gün boş galyp biler, ýöne 1 jübütli günden gowy).
+      käbir gün boş galyp biler, ýöne 1 jübütli günden gowy);
+    - adaty gün 2 jübüt, hepdede diňe bir gün 3 jübüt: ikinji 3 jübütli gün güýçli jerimelenýär
+      (iki hepdelik raspisaniýede iki hepdäniň ýüküni deňlemäge-de itergi berýär).
     Kiçi topary bar toparda her kiçi toparyň güni aýratyn barlanýar (umumy sapaklar + öz sapaklary):
     1-nji kiçi topar 1-nji jübütde, 2-nji kiçi topar 2-nji jübütde okasa, ikisinde hem penjire bar.
     """
@@ -90,9 +94,15 @@ def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, s
         days[who, w, day].append((r, occ))
 
     penalties = []
+    long_days = defaultdict(list)  # (okaýan, hepde) -> 3+ jübütli günleriň var-lary
     for key, items in days.items():
         items.sort(key=lambda t: t[0])
         occ = [v for _, v in items]
+        if len(occ) >= 3:
+            long_day = model.new_bool_var(f"long_{key}")
+            model.add(sum(occ) <= 2 + len(occ) * long_day)  # 3+ jübüt bolsa 1
+            penalties.append(W_LONG_DAY * long_day)
+            long_days[key[0], key[1]].append(long_day)
         any_lesson = model.new_bool_var(f"day_{key}")
         model.add_max_equality(any_lesson, occ)
         single = model.new_bool_var(f"single_{key}")
@@ -108,6 +118,11 @@ def _group_day_shape(model, slot_by_id, rank, by_group_slot, by_subgroup_slot, s
             gap = model.new_bool_var(f"gap_{key}_{j}")
             model.add(gap >= before + after - occ[j] - 1)
             penalties.append(W_GAP * gap)
+    for key, vs in long_days.items():
+        if len(vs) > 1:
+            extra = model.new_int_var(0, len(vs), f"extra_long_{key}")
+            model.add(extra >= sum(vs) - 1)
+            penalties.append(W_EXTRA_LONG_DAY * extra)
     return penalties
 
 
