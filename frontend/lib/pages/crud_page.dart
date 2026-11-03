@@ -26,7 +26,9 @@ class _CrudPageState extends State<CrudPage> {
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _refs = {};
   String _query = '';
-  int? _faculty = Api.instance.deanFaculty; // null: hemmesi; dekan: adaty öz fakulteti
+  // null: hemmesi. Dekan: fakultet süzgüji bolan sahypalarda (mugallymlar, otaglar) adaty öz fakulteti;
+  // galan sahypalary serwer eýýäm dekanyň fakulteti boýunça berýär.
+  late int? _faculty = spec.facultyFilter != null ? Api.instance.deanFaculty : null;
   int? _sortColumn;
   bool _sortAsc = true;
   int _page = 0;
