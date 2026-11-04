@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +15,8 @@ class Settings(BaseSettings):
     token_days: int = 30  # giriş näçe gün güýçde
     mobile_dir: str | None = None  # mugallym app-ynyň web build bukjasy; berilse "/m" salgysyndan berilýär
     static_dir: str | None = None  # Flutter web build bukjasy; berilse "/" salgysyndan berilýär
+    # Mugallymlaryň sapaga goýan faýllary (prezentasiýalar).
+    upload_dir: str = str(Path(__file__).resolve().parents[2] / "uploads")
 
 
 settings = Settings()

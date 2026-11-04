@@ -8,3 +8,6 @@ build/
 .dart_tool/
 .secret_key
 hasaplar*.csv
+
+# mugallymlaryň ýükleýän faýllary
+backend/uploads/

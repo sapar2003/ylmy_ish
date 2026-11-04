@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: ctl,
           keyboardType: TextInputType.url,
           autocorrect: false,
-          decoration: const InputDecoration(hintText: 'http://10.211.1.4:8000'),
+          decoration: const InputDecoration(hintText: 'http://192.168.1.7:8000'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('Ýatyr')),

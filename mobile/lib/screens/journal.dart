@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'home.dart' show lessonTypes, longDate, months;
+import 'topic.dart';
 
 const markValues = ['5', '4', '3', '2', 'gm'];
 
@@ -121,6 +122,8 @@ class _LessonMarksScreenState extends State<LessonMarksScreen> {
                     '${l['subgroup'] != null ? ' · ${l['subgroup']}-nji kiçi topar' : ''}'
                     ' · ${lessonTypes[l['lesson_type']] ?? ''}',
                     style: const TextStyle(color: C.muted)),
+                const SizedBox(height: 12),
+                TopicEditor(entryId: widget.entry['id'] as int, day: widget.day),
                 const SizedBox(height: 12),
                 _Banner(editable: editable, day: widget.day, deadline: DateTime.parse('${l['deadline']}')),
                 const SizedBox(height: 12),

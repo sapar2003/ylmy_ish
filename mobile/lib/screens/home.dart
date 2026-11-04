@@ -4,6 +4,7 @@ import '../api.dart';
 import '../theme.dart';
 import 'journal.dart';
 import 'login.dart';
+import 'topic.dart';
 
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
 const weekdaysShort = ['Du', 'Si', 'Ça', 'Pe', 'An', 'Şe', 'Ýe'];
@@ -192,6 +193,11 @@ class _ScheduleViewState extends State<ScheduleView> {
     }
   }
 
+  /// Sapagyň şol günki temasy (sapak: assignment + sene + wagt sloty).
+  Map<String, dynamic>? _topicOf(Map<String, dynamic> e, DateTime day) =>
+      ((_week?['topics'] as List?) ?? []).cast<Map<String, dynamic>>().where((t) =>
+          t['assignment_id'] == e['assignment_id'] && t['time_slot_id'] == e['time_slot_id'] && t['day'] == isoDate(day)).firstOrNull;
+
   void _select(DateTime d) {
     final reload = mondayOf(d) != _monday;
     setState(() => _day = d);
@@ -261,7 +267,13 @@ class _ScheduleViewState extends State<ScheduleView> {
               const EmptyView(icon: Icons.free_breakfast_outlined, title: 'Sapak ýok', text: 'Bu gün sapagyňyz ýok.')
             else
               for (final e in lessons)
-                _LessonTile(entry: e, day: _day, badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null)),
+                _LessonTile(
+                  entry: e,
+                  day: _day,
+                  topic: _topicOf(e, _day),
+                  onReturn: _load,
+                  badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null),
+                ),
           ]),
         ),
       ),
@@ -303,9 +315,11 @@ class _ScheduleViewState extends State<ScheduleView> {
 }
 
 class _LessonTile extends StatelessWidget {
-  const _LessonTile({required this.entry, required this.day, this.badge});
+  const _LessonTile({required this.entry, required this.day, this.badge, this.topic, this.onReturn});
   final Map<String, dynamic> entry;
   final DateTime day;
+  final Map<String, dynamic>? topic; // mugallymyň goýan temasy we faýly
+  final VoidCallback? onReturn;
   final String? badge;
 
   @override
@@ -342,7 +356,10 @@ class _LessonTile extends StatelessWidget {
             child: InkWell(
               onTap: student
                   ? null
-                  : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LessonMarksScreen(entry: entry, day: day))),
+                  : () async {
+                      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LessonMarksScreen(entry: entry, day: day)));
+                      onReturn?.call(); // tema üýtgän bolsa kartany täzelemek
+                    },
               child: IntrinsicHeight(
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Container(
@@ -375,6 +392,7 @@ class _LessonTile extends StatelessWidget {
                         ],
                       ] else
                         _info(Icons.groups_outlined, '$groups$sub'),
+                      if (topic != null) TopicLine(topic: topic!),
                       if (past) ...[
                         const SizedBox(height: 10),
                         Row(children: [

@@ -10,6 +10,7 @@ from app.api.crud import DbSession, get_or_404
 from app.api.v1.exams import list_entries as exam_entries
 from app.api.v1.timetables import list_entries as timetable_entries
 from app.api.v1.timetables import week_of
+from app.api.v1.topics import week_topics
 from app.core.security import create_token, hash_password, verify_password
 from app.schemas import user as s
 from app.schemas.timetable import Ref
@@ -163,8 +164,9 @@ def my_timetable(user: TeacherUser, db: DbSession, on: date | None = None):
     on = on or date.today()
     week = week_of(tt, on)
     entries = timetable_entries(tt.id, db, group_id=None, teacher_id=user.teacher_id, room_id=None, week=week, on=None)
-    return s.MyWeekRead(timetable=Ref(id=tt.id, name=tt.name), weeks=tt.weeks, week=week,
-                        week_start=on - timedelta(days=on.weekday()), entries=entries)
+    start = on - timedelta(days=on.weekday())
+    return s.MyWeekRead(timetable=Ref(id=tt.id, name=tt.name), weeks=tt.weeks, week=week, week_start=start,
+                        entries=entries, topics=week_topics(db, {e.assignment_id for e in entries}, start))
 
 
 @me_router.get("/exams", response_model=list[s.MyExamRead])

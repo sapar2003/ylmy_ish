@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.models import Role
 from app.schemas.timetable import EntryRead, Ref
+from app.schemas.topic import TopicRead
 
 
 class LoginIn(BaseModel):
@@ -66,6 +67,7 @@ class MyWeekRead(BaseModel):
     week: int | None = None  # 1 sanawjy, 2 maýdalawjy (iki hepdelik raspisaniýede)
     week_start: date | None = None
     entries: list[EntryRead] = []
+    topics: list[TopicRead] = []  # şu hepdäniň sapaklarynyň temalary we faýllary
 
 
 class MyExamRead(BaseModel):

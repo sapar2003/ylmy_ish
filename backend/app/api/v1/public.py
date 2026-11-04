@@ -1,7 +1,7 @@
 """Talyplar üçin (girişsiz): toparyny saýlap, çap edilen raspisaniýäni we synaglary görýär.
 
-Diňe "Mugallymlara çap et" edilen raspisaniýe we synag raspisaniýesi görkezilýär; şahsy maglumat (baha, talyp
-sanawy) bu ýerde ýok.
+Diňe "Mugallymlara çap et" edilen raspisaniýe we synag raspisaniýesi görkezilýär (mugallymlaryň goýan
+temalary we faýllary bilen); şahsy maglumat (baha, talyp sanawy) bu ýerde ýok.
 """
 from datetime import date, timedelta
 
@@ -13,6 +13,7 @@ from app.api.crud import DbSession, get_or_404
 from app.api.v1.exams import list_entries as exam_entries
 from app.api.v1.timetables import list_entries as timetable_entries
 from app.api.v1.timetables import week_of
+from app.api.v1.topics import week_topics
 from app.schemas import user as s
 from app.schemas.timetable import Ref
 
@@ -47,8 +48,9 @@ def group_timetable(group_id: int, db: DbSession, subgroup_id: int | None = None
     entries = [e for e in timetable_entries(tt.id, db, group_id=group_id, teacher_id=None, room_id=None, week=week,
                                             on=None)
                if subgroup_id is None or e.subgroup is None or e.subgroup.id == subgroup_id]
-    return s.MyWeekRead(timetable=Ref(id=tt.id, name=tt.name), weeks=tt.weeks, week=week,
-                        week_start=on - timedelta(days=on.weekday()), entries=entries)
+    start = on - timedelta(days=on.weekday())
+    return s.MyWeekRead(timetable=Ref(id=tt.id, name=tt.name), weeks=tt.weeks, week=week, week_start=start,
+                        entries=entries, topics=week_topics(db, {e.assignment_id for e in entries}, start))
 
 
 @router.get("/exams", response_model=list[s.MyExamRead])

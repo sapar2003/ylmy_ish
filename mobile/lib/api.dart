@@ -19,7 +19,7 @@ class Api {
   static final Api instance = Api._();
 
   /// Synag üçin adaty serwer: admin kompýuteri, şol bir Wi-Fi-da.
-  static const defaultServer = 'http://10.211.1.4:8000';
+  static const defaultServer = 'http://192.168.1.7:8000';
 
   late SharedPreferences _prefs;
   String server = defaultServer;
@@ -160,6 +160,32 @@ class Api {
           as Map<String, dynamic>;
 
   /// `marks`: talybyň id-si → baha ("5", "4", "3", "2", "gm") ýa-da null (aýyrmak).
+  // --- sapagyň temasy we faýly ---
+  Map<String, String> _lessonQuery(int entryId, DateTime day) => {'entry_id': '$entryId', 'day': isoDate(day)};
+
+  Future<Map<String, dynamic>?> topic(int entryId, DateTime day) async =>
+      await _send(http.get(_uri('me/topic', _lessonQuery(entryId, day)), headers: _headers)) as Map<String, dynamic>?;
+
+  Future<Map<String, dynamic>?> saveTopic(int entryId, DateTime day, String topic, String note) async =>
+      await _send(http.put(_uri('me/topic'), headers: _headers, body: jsonEncode({
+        'entry_id': entryId,
+        'day': isoDate(day),
+        'topic': topic.trim(),
+        'note': note.trim().isEmpty ? null : note.trim(),
+      }))) as Map<String, dynamic>?;
+
+  /// Faýl göni sorag bedeninde iberilýär (multipart gerek däl).
+  Future<Map<String, dynamic>?> uploadTopicFile(int entryId, DateTime day, String name, List<int> bytes) async =>
+      await _send(http.put(_uri('me/topic/file', {..._lessonQuery(entryId, day), 'name': name}),
+          headers: {..._headers, 'Content-Type': 'application/octet-stream'}, body: bytes)) as Map<String, dynamic>?;
+
+  Future<Map<String, dynamic>?> deleteTopicFile(int entryId, DateTime day) async =>
+      await _send(http.delete(_uri('me/topic/file', _lessonQuery(entryId, day)), headers: _headers))
+          as Map<String, dynamic>?;
+
+  /// Serweriň berýän faýl salgysy (/api/v1/public/files/...) -> doly salgy.
+  Uri fileUri(String path) => Uri.parse('$server$path');
+
   Future<Map<String, dynamic>> saveLesson(int entryId, DateTime day, Map<int, String?> marks) async =>
       await _send(http.put(_uri('me/lesson'), headers: _headers, body: jsonEncode({
         'entry_id': entryId,
