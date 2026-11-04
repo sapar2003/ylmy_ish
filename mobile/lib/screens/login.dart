@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'student.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: ctl,
           keyboardType: TextInputType.url,
           autocorrect: false,
-          decoration: const InputDecoration(hintText: 'http://192.168.1.7:8000'),
+          decoration: const InputDecoration(hintText: 'http://10.211.1.4:8000'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('Ýatyr')),
@@ -93,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 28),
                 const Text('Raspisaniýe', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: C.text)),
                 const SizedBox(height: 6),
-                const Text('Sapaklaryňyzy we synaglaryňyzy görmek üçin giriň.',
+                const Text('Mugallymlar giriň, talyplar toparyny saýlasyn.',
                     style: TextStyle(fontSize: 15, color: C.muted)),
                 const SizedBox(height: 32),
                 const _Label('Login'),
@@ -136,8 +137,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
                       : const Text('Gir'),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  onPressed: () => Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => StudentPickScreen(server: _server))),
+                  icon: const Icon(Icons.school_outlined),
+                  label: const Text('Men talyp — toparymy saýlaýaryn', style: TextStyle(fontSize: 15)),
+                ),
                 const SizedBox(height: 20),
-                const Text('Login we wagtlaýyn paroly okuw bölüminden alyň.',
+                const Text('Mugallymlar: login we wagtlaýyn paroly okuw bölüminden alyň.',
                     textAlign: TextAlign.center, style: TextStyle(color: C.muted, fontSize: 13)),
                 if (!kIsWeb) ...[
                   const SizedBox(height: 8),

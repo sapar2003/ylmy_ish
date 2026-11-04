@@ -25,7 +25,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
-  String get _name => '${Api.instance.me?['teacher']?['name'] ?? Api.instance.me?['username'] ?? ''}';
+  bool get _student => Api.instance.isStudent;
+
+  /// Talyp üçin: "2 MH (Ç) · 1-nji kiçi topar".
+  String get _groupLabel {
+    final s = Api.instance.student ?? {};
+    return '${s['group'] ?? ''}${s['subgroup'] != null ? ' · ${s['subgroup']}-nji kiçi topar' : ''}';
+  }
+
+  String get _name => _student
+      ? '${Api.instance.student?['group'] ?? ''}'
+      : '${Api.instance.me?['teacher']?['name'] ?? Api.instance.me?['username'] ?? ''}';
 
   /// "Gurbangylyçew Aman Öräýewiç" -> "Aman"; "Hudaýgulyýewa G." -> doly at.
   String get _firstName {
@@ -46,11 +56,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: C.primarySoft,
                 child: Text(_name.isEmpty ? '?' : _name[0], style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700)),
               ),
-              title: Text(_name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text('${Api.instance.me?['username'] ?? ''}'),
+              title: Text(_student ? _groupLabel : _name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(_student ? 'Talyp · ${Api.instance.student?['faculty'] ?? ''}' : '${Api.instance.me?['username'] ?? ''}'),
             ),
             const Divider(),
-            ListTile(
+            if (_student)
+              ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('Topary çalyş'),
+                onTap: () {
+                  Navigator.pop(c);
+                  Api.instance.logout();
+                },
+              ),
+            if (!_student) ListTile(
               leading: const Icon(Icons.key_outlined),
               title: const Text('Paroly çalyş'),
               onTap: () {
@@ -58,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
               },
             ),
-            ListTile(
+            if (!_student) ListTile(
               leading: const Icon(Icons.logout, color: C.danger),
               title: const Text('Çykmak', style: TextStyle(color: C.danger)),
               onTap: () {
@@ -84,7 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Salam, $_firstName', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  Text(_student ? _groupLabel : 'Salam, $_firstName',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text(longDate(DateTime.now()), style: const TextStyle(color: C.muted)),
                 ]),
@@ -100,7 +120,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ]),
           ),
           const Divider(),
-          Expanded(child: IndexedStack(index: _tab, children: const [ScheduleView(), JournalView(), ExamsView()])),
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
+              children: _student ? const [ScheduleView(), ExamsView()] : const [ScheduleView(), JournalView(), ExamsView()],
+            ),
+          ),
         ]),
       ),
       bottomNavigationBar: Container(
@@ -108,10 +133,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
-            NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
-            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
+          destinations: [
+            const NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
+            if (!_student) const NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
+            const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
           ],
         ),
       ),
@@ -291,7 +316,8 @@ class _LessonTile extends StatelessWidget {
         ? '${entry['stream']['name']}'
         : (entry['groups'] as List).map((g) => g['name']).join(', ');
     final sub = entry['subgroup'] != null ? ' · ${entry['subgroup']['name']}-nji kiçi topar' : '';
-    final past = !day.isAfter(dayOnly(DateTime.now()));
+    final student = Api.instance.isStudent;
+    final past = !student && !day.isAfter(dayOnly(DateTime.now()));
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -314,7 +340,9 @@ class _LessonTile extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             // Sapaga basyp talyplaryň sanawyny açmak we baha goýmak.
             child: InkWell(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LessonMarksScreen(entry: entry, day: day))),
+              onTap: student
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LessonMarksScreen(entry: entry, day: day))),
               child: IntrinsicHeight(
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Container(
@@ -339,7 +367,14 @@ class _LessonTile extends StatelessWidget {
                       const SizedBox(height: 8),
                       _info(Icons.meeting_room_outlined, 'Otag ${entry['room']?['name'] ?? '—'}', bold: true),
                       const SizedBox(height: 3),
-                      _info(Icons.groups_outlined, '$groups$sub'),
+                      if (student) ...[
+                        _info(Icons.person_outline, '${entry['teacher']['name']}'),
+                        if (entry['stream'] != null || sub.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          _info(Icons.groups_outlined, '$groups$sub'),
+                        ],
+                      ] else
+                        _info(Icons.groups_outlined, '$groups$sub'),
                       if (past) ...[
                         const SizedBox(height: 10),
                         Row(children: [
@@ -461,6 +496,7 @@ class _ExamTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final examiner = exam['role'] == 'examiner';
+    final student = exam['role'] == 'student';
     final groups = (exam['groups'] as List).map((g) => g['name']).join(', ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -471,7 +507,8 @@ class _ExamTile extends StatelessWidget {
             Row(children: [
               Text('${exam['starts_at']}–${exam['ends_at']}', style: const TextStyle(fontWeight: FontWeight.w700)),
               const Spacer(),
-              Tag(examiner ? 'Uly mugallym' : 'Kiçi mugallym', color: examiner ? C.primary : const Color(0xFF7A5AF8)),
+              if (!student)
+                Tag(examiner ? 'Uly mugallym' : 'Kiçi mugallym', color: examiner ? C.primary : const Color(0xFF7A5AF8)),
             ]),
             const SizedBox(height: 8),
             Text('${exam['subject']['name']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, height: 1.3)),
@@ -481,7 +518,8 @@ class _ExamTile extends StatelessWidget {
             _info(Icons.groups_outlined, groups),
             if (exam['partner'] != null) ...[
               const SizedBox(height: 3),
-              _info(Icons.person_outline, '${examiner ? 'Kiçi mugallym' : 'Uly mugallym'}: ${exam['partner']['name']}'),
+              _info(Icons.person_outline,
+                  '${student ? 'Mugallym' : examiner ? 'Kiçi mugallym' : 'Uly mugallym'}: ${exam['partner']['name']}'),
             ],
           ]),
         ),

@@ -19,12 +19,16 @@ class Api {
   static final Api instance = Api._();
 
   /// Synag üçin adaty serwer: admin kompýuteri, şol bir Wi-Fi-da.
-  static const defaultServer = 'http://192.168.1.7:8000';
+  static const defaultServer = 'http://10.211.1.4:8000';
 
   late SharedPreferences _prefs;
   String server = defaultServer;
   String? token;
   Map<String, dynamic>? me;
+
+  /// Talyp: girişsiz, saýlan topary (we kiçi topary). {group_id, group, subgroup_id, subgroup, faculty}
+  Map<String, dynamic>? student;
+  bool get isStudent => token == null && student != null;
 
   /// Girilen ýagdaý üýtgände (giriş/çykyş) UI täzelenýär.
   final ValueNotifier<bool> loggedIn = ValueNotifier(false);
@@ -36,7 +40,9 @@ class Api {
     token = _prefs.getString('token');
     final saved = _prefs.getString('me');
     me = saved == null ? null : jsonDecode(saved) as Map<String, dynamic>;
-    loggedIn.value = token != null && me != null;
+    final st = _prefs.getString('student');
+    student = st == null ? null : jsonDecode(st) as Map<String, dynamic>;
+    loggedIn.value = (token != null && me != null) || student != null;
   }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
@@ -86,9 +92,28 @@ class Api {
 
   void enter() => loggedIn.value = true;
 
+  Future<void> _useServer(String serverUrl) async {
+    if (kIsWeb) return;
+    server = serverUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    await _prefs.setString('server', server);
+  }
+
+  /// Talyp üçin toparlaryň sanawy (girişsiz).
+  Future<List<Map<String, dynamic>>> publicGroups(String serverUrl) async {
+    await _useServer(serverUrl);
+    return ((await _send(http.get(_uri('public/groups'), headers: _headers))) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> enterStudent(Map<String, dynamic> choice) async {
+    student = choice;
+    await _prefs.setString('student', jsonEncode(choice));
+    loggedIn.value = true;
+  }
+
   Future<void> logout() async {
     token = null;
     me = null;
+    student = null;
     for (final k in _prefs.getKeys().where((k) => k != 'server').toList()) {
       await _prefs.remove(k);
     }
@@ -111,12 +136,20 @@ class Api {
 
   /// Hepdäniň sapaklary (`on` senäniň hepdesi; sanawjy/maýdalawjy serwerde kesgitlenýär).
   Future<({Map<String, dynamic> data, bool cached})> week(DateTime on) async {
-    final r = await _cached('me/timetable', {'on': isoDate(on)});
+    final r = isStudent
+        ? await _cached('public/timetable', {
+            'group_id': '${student!['group_id']}',
+            if (student!['subgroup_id'] != null) 'subgroup_id': '${student!['subgroup_id']}',
+            'on': isoDate(on),
+          })
+        : await _cached('me/timetable', {'on': isoDate(on)});
     return (data: r.data as Map<String, dynamic>, cached: r.cached);
   }
 
   Future<({List<Map<String, dynamic>> data, bool cached})> exams() async {
-    final r = await _cached('me/exams');
+    final r = isStudent
+        ? await _cached('public/exams', {'group_id': '${student!['group_id']}'})
+        : await _cached('me/exams');
     return (data: (r.data as List).cast<Map<String, dynamic>>(), cached: r.cached);
   }
 
