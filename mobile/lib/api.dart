@@ -180,6 +180,24 @@ class Api {
     return (data: (r.data as List).cast<Map<String, dynamic>>(), cached: r.cached);
   }
 
+  // --- çat ---
+  Future<List<Map<String, dynamic>>> chatConversations() async =>
+      ((await _send(http.get(_uri('chat/conversations'), headers: _headers))) as List).cast<Map<String, dynamic>>();
+
+  Future<List<Map<String, dynamic>>> chatContacts() async =>
+      ((await _send(http.get(_uri('chat/contacts'), headers: _headers))) as List).cast<Map<String, dynamic>>();
+
+  Future<int> chatUnread() async =>
+      ((await _send(http.get(_uri('chat/unread'), headers: _headers))) as Map<String, dynamic>)['count'] as int;
+
+  Future<List<Map<String, dynamic>>> chatMessages(int otherId, int after) async =>
+      ((await _send(http.get(_uri('chat/$otherId/messages', {'after': '$after'}), headers: _headers))) as List)
+          .cast<Map<String, dynamic>>();
+
+  Future<Map<String, dynamic>> chatSend(int otherId, String text) async =>
+      await _send(http.post(_uri('chat/$otherId/messages'), headers: _headers, body: jsonEncode({'text': text})))
+          as Map<String, dynamic>;
+
   // --- sapagyň temasy we faýly ---
   Map<String, String> _lessonQuery(int entryId, DateTime day) => {'entry_id': '$entryId', 'day': isoDate(day)};
 

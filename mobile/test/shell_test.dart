@@ -19,7 +19,7 @@ Future<void> _open(WidgetTester tester, Map<String, dynamic> me) async {
 }
 
 void main() {
-  testWidgets('mugallym: dört bölüm we profil', (tester) async {
+  testWidgets('mugallym: bäş bölüm we profil', (tester) async {
     await _open(tester, {
       'id': 1,
       'username': 'annayewa.a',
@@ -30,8 +30,9 @@ void main() {
       'teacher_info': {'position': 'Mugallym-öwreniji', 'department': 'Kiberhowpsuzlyk kafedrasy', 'faculty': 'STKF', 'phone': '+99365111111'},
     });
     expect(find.text('Salam, Aýlar'), findsOneWidget);
-    expect(find.text('Žurnal'), findsOneWidget);
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.text('Žurnal'), findsWidgets);
+    expect(find.text('Çat'), findsWidgets);
+    expect(find.byType(NavigationDestination), findsNWidgets(5));
 
     await tester.tap(find.text('Profil'));
     await tester.pump();
@@ -42,7 +43,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('talyp: dört bölüm, Žurnal ýerine Bahalar', (tester) async {
+  testWidgets('talyp: bäş bölüm, Žurnal ýerine Bahalar', (tester) async {
     await _open(tester, {
       'id': 2,
       'username': 'talyp1',
@@ -55,7 +56,8 @@ void main() {
     expect(find.text('Salam, Aman'), findsOneWidget);
     expect(find.text('Žurnal'), findsNothing);
     expect(find.text('Bahalar'), findsWidgets);
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.text('Çat'), findsWidgets);
+    expect(find.byType(NavigationDestination), findsNWidgets(5));
 
     await tester.tap(find.text('Profil'));
     await tester.pump();

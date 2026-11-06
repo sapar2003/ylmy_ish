@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'chat.dart';
 import 'grades.dart';
 import 'home.dart';
 import 'journal.dart';
@@ -17,10 +20,27 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _tab = 0;
+  int _unread = 0;
+  Timer? _unreadTimer;
+
+  Future<void> _checkUnread() async {
+    try {
+      final n = await Api.instance.chatUnread();
+      if (mounted && n != _unread) setState(() => _unread = n);
+    } on ApiException catch (_) {} // internet ýok: belgi öňküsi ýaly galýar
+  }
+
+  @override
+  void dispose() {
+    _unreadTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
+    _checkUnread();
+    _unreadTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkUnread());
     Api.instance.refreshMe().then((_) {
       if (mounted) setState(() {});
     }).catchError((_) {}); // internet ýok: ýatda saklanan maglumat görkezilýär
@@ -38,6 +58,10 @@ class _MainShellState extends State<MainShell> {
           if (teacher) const _Tab(header: _PageTitle('Žurnal', 'Dersleriňiz boýunça bahalar'), child: JournalView()),
           if (!teacher) const _Tab(header: _PageTitle('Bahalar', 'Dersler boýunça öz bahalaryňyz'), child: GradesView()),
           _Tab(
+            header: _PageTitle('Çat', teacher ? 'Talyplaryňyz bilen ýazyşmalar' : 'Mugallymlaryňyz bilen ýazyşmalar'),
+            child: const ChatListView(),
+          ),
+          _Tab(
             header: _PageTitle('Synaglar', teacher ? 'Uly ýa-da kiçi mugallym bolan synaglaryňyz' : 'Ara we ýarymýyllyk synaglaryňyz'),
             child: const ExamsView(),
           ),
@@ -48,11 +72,19 @@ class _MainShellState extends State<MainShell> {
         decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.border))),
         child: NavigationBar(
           selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
+          onDestinationSelected: (i) {
+            setState(() => _tab = i);
+            _checkUnread();
+          },
           destinations: [
             const NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
             if (teacher) const NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
             if (!teacher) const NavigationDestination(icon: Icon(Icons.grade_outlined), selectedIcon: Icon(Icons.grade), label: 'Bahalar'),
+            NavigationDestination(
+              icon: Badge(isLabelVisible: _unread > 0, label: Text('$_unread'), child: const Icon(Icons.chat_bubble_outline)),
+              selectedIcon: Badge(isLabelVisible: _unread > 0, label: Text('$_unread'), child: const Icon(Icons.chat_bubble)),
+              label: 'Çat',
+            ),
             const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
             const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
           ],
