@@ -26,9 +26,9 @@ class Api {
   String? token;
   Map<String, dynamic>? me;
 
-  /// Talyp: girişsiz, saýlan topary (we kiçi topary). {group_id, group, subgroup_id, subgroup, faculty}
-  Map<String, dynamic>? student;
-  bool get isStudent => token == null && student != null;
+  /// Talyp: {group_id, group, subgroup_id, subgroup, faculty}; raspisaniýesi şol topar boýunça.
+  Map<String, dynamic>? get student => me?['student'] as Map<String, dynamic>?;
+  bool get isStudent => me?['role'] == 'student';
 
   /// Girilen ýagdaý üýtgände (giriş/çykyş) UI täzelenýär.
   final ValueNotifier<bool> loggedIn = ValueNotifier(false);
@@ -40,9 +40,8 @@ class Api {
     token = _prefs.getString('token');
     final saved = _prefs.getString('me');
     me = saved == null ? null : jsonDecode(saved) as Map<String, dynamic>;
-    final st = _prefs.getString('student');
-    student = st == null ? null : jsonDecode(st) as Map<String, dynamic>;
-    loggedIn.value = (token != null && me != null) || student != null;
+    await _prefs.remove('student'); // köne wersiýanyň topar saýlawy
+    loggedIn.value = token != null && me != null;
   }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
@@ -69,19 +68,41 @@ class Api {
     return body;
   }
 
-  Future<Map<String, dynamic>> login(String serverUrl, String username, String password) async {
-    if (!kIsWeb) {
-      server = serverUrl.trim().replaceAll(RegExp(r'/+$'), '');
-      await _prefs.setString('server', server);
+  Future<Map<String, dynamic>> _enter(Object response) async {
+    final r = response as Map<String, dynamic>;
+    if (r['role'] != 'teacher' && r['role'] != 'student') {
+      throw ApiException('Bu programma mugallymlar we talyplar üçin.');
     }
-    final r = await _send(http.post(_uri('auth/login'), headers: _headers,
-        body: jsonEncode({'username': username.trim().toLowerCase(), 'password': password}))) as Map<String, dynamic>;
-    if (r['role'] != 'teacher') throw ApiException('Bu programma mugallymlar üçin. Admin kompýuterden girýär.');
     token = r['token'] as String;
     me = r..remove('token');
     await _prefs.setString('token', token!);
     await _prefs.setString('me', jsonEncode(me));
     return me!;
+  }
+
+  Future<Map<String, dynamic>> phoneLogin(String serverUrl, String phone, String password) async {
+    await _useServer(serverUrl);
+    return _enter(await _send(http.post(_uri('auth/phone-login'), headers: _headers,
+        body: jsonEncode({'phone': phone, 'password': password}))));
+  }
+
+  /// Telefona giriş kody iberýär.
+  Future<void> requestCode(String serverUrl, String phone) async {
+    await _useServer(serverUrl);
+    await _send(http.post(_uri('auth/otp/request'), headers: _headers, body: jsonEncode({'phone': phone})));
+  }
+
+  Future<Map<String, dynamic>> verifyCode(String serverUrl, String phone, String code) async {
+    await _useServer(serverUrl);
+    return _enter(await _send(http.post(_uri('auth/otp/verify'), headers: _headers,
+        body: jsonEncode({'phone': phone, 'code': code}))));
+  }
+
+  /// Kod bilen girip, paroly ýok hasaba ilkinji paroly goýmak.
+  Future<void> setPassword(String newPassword) async {
+    me = await _send(http.post(_uri('auth/set-password'), headers: _headers,
+        body: jsonEncode({'new_password': newPassword}))) as Map<String, dynamic>;
+    await _prefs.setString('me', jsonEncode(me));
   }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
@@ -98,22 +119,9 @@ class Api {
     await _prefs.setString('server', server);
   }
 
-  /// Talyp üçin toparlaryň sanawy (girişsiz).
-  Future<List<Map<String, dynamic>>> publicGroups(String serverUrl) async {
-    await _useServer(serverUrl);
-    return ((await _send(http.get(_uri('public/groups'), headers: _headers))) as List).cast<Map<String, dynamic>>();
-  }
-
-  Future<void> enterStudent(Map<String, dynamic> choice) async {
-    student = choice;
-    await _prefs.setString('student', jsonEncode(choice));
-    loggedIn.value = true;
-  }
-
   Future<void> logout() async {
     token = null;
     me = null;
-    student = null;
     for (final k in _prefs.getKeys().where((k) => k != 'server').toList()) {
       await _prefs.remove(k);
     }
@@ -184,7 +192,8 @@ class Api {
           as Map<String, dynamic>?;
 
   /// Serweriň berýän faýl salgysy (/api/v1/public/files/...) -> doly salgy.
-  Uri fileUri(String path) => Uri.parse('$server$path');
+  /// Faýl brauzerde açylýar, şonuň üçin token salgyda.
+  Uri fileUri(String path) => Uri.parse('$server$path').replace(queryParameters: {'token': ?token});
 
   Future<Map<String, dynamic>> saveLesson(int entryId, DateTime day, Map<int, String?> marks) async =>
       await _send(http.put(_uri('me/lesson'), headers: _headers, body: jsonEncode({

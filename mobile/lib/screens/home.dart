@@ -61,24 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: Text(_student ? 'Talyp · ${Api.instance.student?['faculty'] ?? ''}' : '${Api.instance.me?['username'] ?? ''}'),
             ),
             const Divider(),
-            if (_student)
-              ListTile(
-                leading: const Icon(Icons.swap_horiz),
-                title: const Text('Topary çalyş'),
-                onTap: () {
-                  Navigator.pop(c);
-                  Api.instance.logout();
-                },
-              ),
-            if (!_student) ListTile(
+            ListTile(
               leading: const Icon(Icons.key_outlined),
-              title: const Text('Paroly çalyş'),
+              title: Text(Api.instance.me?['has_password'] == false ? 'Parol goý' : 'Paroly çalyş'),
               onTap: () {
                 Navigator.pop(c);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ChangePasswordScreen(firstPassword: Api.instance.me?['has_password'] == false)));
               },
             ),
-            if (!_student) ListTile(
+            ListTile(
               leading: const Icon(Icons.logout, color: C.danger),
               title: const Text('Çykmak', style: TextStyle(color: C.danger)),
               onTap: () {

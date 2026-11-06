@@ -14,7 +14,15 @@ from app.api.v1.topics import week_topics
 from app.core.security import create_token, hash_password, verify_password
 from app.schemas import user as s
 from app.schemas.timetable import Ref
-from app.services.accounts import create_dean_account, create_teacher_accounts, reset_password
+from app.services.accounts import (
+    check_login_code,
+    create_dean_account,
+    create_teacher_accounts,
+    normalize_phone,
+    reset_password,
+    send_login_code,
+    user_by_phone,
+)
 
 router = APIRouter()
 
@@ -27,7 +35,22 @@ def _me(db, user: m.User) -> s.MeRead:
     teacher = db.get(m.Teacher, user.teacher_id) if user.teacher_id else None
     faculty = db.get(m.Faculty, user.faculty_id) if user.faculty_id else None
     return s.MeRead(id=user.id, username=user.username, role=user.role, must_change_password=user.must_change_password,
-                    teacher=_ref(teacher), faculty=_ref(faculty))
+                    teacher=_ref(teacher), faculty=_ref(faculty), student=_student_info(db, user),
+                    has_password=bool(user.password_hash))
+
+
+def _student_info(db, user: m.User) -> s.StudentInfo | None:
+    st = db.get(m.Student, user.student_id) if user.student_id else None
+    if st is None:
+        return None
+    group = db.get(m.Group, st.group_id)
+    sub = db.get(m.Subgroup, st.subgroup_id) if st.subgroup_id else None
+    spec = db.get(m.Specialty, group.specialty_id)
+    dep = db.get(m.Department, spec.department_id)
+    fac = db.get(m.Faculty, dep.faculty_id)
+    return s.StudentInfo(id=st.id, name=st.full_name, group_id=group.id, group=group.name,
+                         subgroup_id=sub.id if sub else None, subgroup=sub.name if sub else None,
+                         faculty=fac.short_name or fac.name)
 
 
 # --- giriş ---
@@ -40,6 +63,47 @@ def login(payload: s.LoginIn, db: DbSession):
     if user is None or not user.active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Login ýa-da parol nädogry.")
     return s.LoginOut(**_me(db, user).model_dump(), token=create_token(user.id))
+
+
+def _phone(raw: str) -> str:
+    phone = normalize_phone(raw)
+    if phone is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Telefon nomeri nädogry. Meselem: +993 65 123456")
+    return phone
+
+
+@auth.post("/phone-login", response_model=s.LoginOut)
+def phone_login(payload: s.PhoneLoginIn, db: DbSession):
+    """Mugallym we talyp: telefon nomeri we parol."""
+    user = user_by_phone(db, _phone(payload.phone))
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Telefon nomeri ýa-da parol nädogry.")
+    return s.LoginOut(**_me(db, user).model_dump(), token=create_token(user.id))
+
+
+@auth.post("/otp/request")
+def otp_request(payload: s.OtpRequestIn, db: DbSession):
+    """Telefona giriş kody. Jogap nomeriň bazada bardygyny aýtmaýar."""
+    send_login_code(db, _phone(payload.phone))
+    return {"ok": True}
+
+
+@auth.post("/otp/verify", response_model=s.LoginOut)
+def otp_verify(payload: s.OtpVerifyIn, db: DbSession):
+    user = check_login_code(db, _phone(payload.phone), payload.code)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Kod nädogry ýa-da möhleti geçdi.")
+    return s.LoginOut(**_me(db, user).model_dump(), token=create_token(user.id))
+
+
+@auth.post("/set-password", response_model=s.MeRead)
+def set_password(payload: s.SetPasswordIn, user: CurrentUser, db: DbSession):
+    """Paroly ýok hasaba (kod bilen giren) ilkinji paroly goýmak."""
+    if user.password_hash:
+        raise HTTPException(status.HTTP_409_CONFLICT, 'Paroluňyz bar: "Paroly çalyş" ulanyň.')
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return _me(db, user)
 
 
 @auth.get("/me", response_model=s.MeRead)

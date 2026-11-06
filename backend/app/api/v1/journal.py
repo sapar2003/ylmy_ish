@@ -11,6 +11,7 @@ from app.api.auth import CurrentUser, FacultyScope, TeacherUser, require_admin, 
 from app.api.crud import DbSession, build_crud_router, check_owner, get_or_404
 from app.schemas.structure import ReadBase
 from app.services import journal as j
+from app.services.accounts import clean_phone
 from app.services.students import create_demo_students
 
 router = APIRouter()
@@ -20,6 +21,7 @@ router = APIRouter()
 class StudentCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     number: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, max_length=30)
     group_id: int
     subgroup_id: int | None = None
     active: bool = True
@@ -28,6 +30,7 @@ class StudentCreate(BaseModel):
 class StudentUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     number: str | None = Field(default=None, max_length=30)
+    phone: str | None = Field(default=None, max_length=30)
     group_id: int | None = None
     subgroup_id: int | None = None
     active: bool | None = None
@@ -38,6 +41,7 @@ class StudentRead(ReadBase, StudentCreate):
 
 
 def _validate_student(db, st: m.Student) -> None:
+    clean_phone(db, st)
     if st.subgroup_id is not None:
         sg = db.get(m.Subgroup, st.subgroup_id)
         if sg is None or sg.group_id != st.group_id:

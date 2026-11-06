@@ -12,13 +12,44 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class StudentInfo(BaseModel):
+    """Talybyň app-da görýän raspisaniýesi şu topar boýunça."""
+    id: int
+    name: str
+    group_id: int
+    group: str
+    subgroup_id: int | None = None
+    subgroup: str | None = None
+    faculty: str | None = None
+
+
 class MeRead(BaseModel):
     id: int
     username: str
     role: Role
     teacher: Ref | None
     faculty: Ref | None = None  # dekan üçin
+    student: StudentInfo | None = None
+    has_password: bool = True
     must_change_password: bool
+
+
+class PhoneLoginIn(BaseModel):
+    phone: str = Field(min_length=1, max_length=30)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class OtpRequestIn(BaseModel):
+    phone: str = Field(min_length=1, max_length=30)
+
+
+class OtpVerifyIn(BaseModel):
+    phone: str = Field(min_length=1, max_length=30)
+    code: str = Field(min_length=1, max_length=10)
+
+
+class SetPasswordIn(BaseModel):
+    new_password: str = Field(min_length=6, max_length=200, description="Iň az 6 harp")
 
 
 class LoginOut(MeRead):

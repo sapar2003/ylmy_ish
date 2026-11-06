@@ -50,5 +50,5 @@ api_router.include_router(admin_router)
 # Giriş (açyk), hasaplar we çap etmek (admin), "meniň raspisaniýäm" (mugallym) — öz barlaglary bilen.
 api_router.include_router(users.router)
 api_router.include_router(journal.router)
-api_router.include_router(public.router)  # talyplar üçin, girişsiz
+api_router.include_router(public.router)  # talyplar üçin
 api_router.include_router(topics.router)

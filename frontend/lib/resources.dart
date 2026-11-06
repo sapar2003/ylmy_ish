@@ -109,6 +109,7 @@ const resources = <ResourceSpec>[
     FieldSpec('full_name', 'Ady, familiýasy'),
     FieldSpec('group_id', 'Topar', type: FieldType.ref, ref: 'groups'),
     FieldSpec('subgroup_id', 'Kiçi topar', type: FieldType.ref, ref: 'subgroups', required: false),
+    FieldSpec('phone', 'Telefon (app-a giriş)', required: false),
     FieldSpec('number', 'Talyp belgisi', required: false),
     FieldSpec('active', 'Okaýar', type: FieldType.boolean, required: false),
   ]),
@@ -122,6 +123,7 @@ const resources = <ResourceSpec>[
     fields: [
       FieldSpec('name', 'Ady'),
       FieldSpec('position', 'Wezipesi', required: false),
+      FieldSpec('phone', 'Telefon (app-a giriş)', required: false),
       FieldSpec('department_id', 'Kafedra', type: FieldType.ref, ref: 'departments'),
       FieldSpec('max_lessons_per_day', 'Günde iň köp', type: FieldType.integer, required: false),
       FieldSpec('max_lessons_per_week', 'Hepdede iň köp', type: FieldType.integer, required: false),

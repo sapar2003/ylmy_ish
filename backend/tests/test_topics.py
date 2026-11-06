@@ -40,13 +40,14 @@ def test_teacher_sets_topic_and_file_students_see_it(anon_client, tmp_path, monk
     # Mugallym we şol sapagy okaýan talyplar (girişsiz) temany we faýly görýär.
     assert c.get("/api/v1/me/timetable?on=2026-09-09", headers=teacher).json()["topics"][0]["topic"] == "Sanawlar we massiwler"
     group = entry["groups"][0]["id"]
-    pub = c.get(f"/api/v1/public/timetable?group_id={group}&on={day}").json()
+    pub = c.get(f"/api/v1/public/timetable?group_id={group}&on={day}", headers=teacher).json()
     topic = next(t for t in pub["topics"] if t["assignment_id"] == entry["assignment_id"])
     assert topic["file_url"] == url
-    assert c.get(url).content == b"PPTX-DATA"
+    assert c.get(url).status_code == 401  # giriş gerek
+    assert c.get(url, headers=teacher).content == b"PPTX-DATA"
 
     # Faýly aýyrmak; tema galýar. Temany hem boşatsa ýazgy aýrylýar.
     assert c.delete(f"/api/v1/me/topic/file?entry_id={entry['id']}&day={day}", headers=teacher).json()["file_url"] is None
-    assert c.get(url).status_code == 404
+    assert c.get(url, headers=teacher).status_code == 404
     assert c.put("/api/v1/me/topic", json={"entry_id": entry["id"], "day": day.isoformat(), "topic": ""},
                  headers=teacher).json() is None

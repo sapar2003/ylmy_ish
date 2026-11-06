@@ -25,6 +25,7 @@ class Student(IdMixin, TimestampMixin, Base):
 
     full_name: Mapped[str] = mapped_column(String(200))
     number: Mapped[str | None] = mapped_column(String(30))  # talyp belgisi (bar bolsa)
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True)  # app-a giriş üçin: +9936XXXXXXX
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="RESTRICT"), index=True)
     subgroup_id: Mapped[int | None] = mapped_column(ForeignKey("subgroups.id", ondelete="SET NULL"), index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -1,14 +1,15 @@
-"""Talyplar üçin (girişsiz): toparyny saýlap, çap edilen raspisaniýäni we synaglary görýär.
+"""Talyplar üçin (telefon nomeri bilen girenden soň): toparynyň çap edilen raspisaniýesi we synaglary.
 
 Diňe "Mugallymlara çap et" edilen raspisaniýe we synag raspisaniýesi görkezilýär (mugallymlaryň goýan
 temalary we faýllary bilen); şahsy maglumat (baha, talyp sanawy) bu ýerde ýok.
 """
 from datetime import date, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app import models as m
+from app.api.auth import current_user
 from app.api.crud import DbSession, get_or_404
 from app.api.v1.exams import list_entries as exam_entries
 from app.api.v1.timetables import list_entries as timetable_entries
@@ -17,7 +18,7 @@ from app.api.v1.topics import week_topics
 from app.schemas import user as s
 from app.schemas.timetable import Ref
 
-router = APIRouter(prefix="/public", tags=["Talyplar üçin"])
+router = APIRouter(prefix="/public", tags=["Talyplar üçin"], dependencies=[Depends(current_user)])
 
 
 @router.get("/groups")

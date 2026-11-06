@@ -15,6 +15,7 @@ def _check_time_order(starts_at: time | None, ends_at: time | None) -> None:
 class TeacherCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     position: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
     department_id: int
     max_lessons_per_week: int | None = Field(default=None, ge=1)
     max_lessons_per_day: int | None = Field(default=None, ge=1)
@@ -23,6 +24,7 @@ class TeacherCreate(BaseModel):
 class TeacherUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     position: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
     department_id: int | None = None
     max_lessons_per_week: int | None = Field(default=None, ge=1)
     max_lessons_per_day: int | None = Field(default=None, ge=1)

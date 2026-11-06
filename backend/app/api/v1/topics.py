@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models as m
-from app.api.auth import TeacherUser
+from app.api.auth import CurrentUser, TeacherUser
 from app.api.crud import DbSession, get_or_404
 from app.api.v1.journal import _own_lesson
 from app.core.config import settings
@@ -147,8 +147,8 @@ router.include_router(me)
 
 
 @router.get("/public/files/{topic_id}/{name}", tags=["Talyplar üçin"])
-def download(topic_id: int, name: str, db: DbSession):
-    """Sapagyň faýlyny ýüklemek (talyplar üçin, girişsiz)."""
+def download(topic_id: int, name: str, _user: CurrentUser, db: DbSession):
+    """Sapagyň faýlyny ýüklemek: brauzerden açylýar, şonuň üçin token ?token= bilen hem kabul edilýär."""
     t = get_or_404(db, m.LessonTopic, topic_id, "Faýl")
     path = _upload_dir() / t.file_key if t.file_key else None
     if path is None or not path.is_file():

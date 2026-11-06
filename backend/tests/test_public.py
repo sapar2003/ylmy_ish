@@ -1,9 +1,11 @@
 from tests.test_users import setup
 
 
-def test_student_sees_group_timetable_without_login(anon_client):
+def test_student_sees_group_timetable(anon_client):
     c = anon_client
     admin = setup(c)
+    assert c.get("/api/v1/public/groups").status_code == 401  # giriş gerek
+    c.headers.update(admin)
     groups = c.get("/api/v1/public/groups").json()
     assert groups and all("faculty" in g and "subgroups" in g for g in groups)
     group = next(g for g in groups if g["subgroups"]) if any(g["subgroups"] for g in groups) else groups[0]

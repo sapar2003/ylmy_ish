@@ -22,6 +22,7 @@ class Teacher(IdMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(200))
     position: Mapped[str | None] = mapped_column(String(100))
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True)  # app-a giriş üçin: +9936XXXXXXX
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="RESTRICT"), index=True)
     max_lessons_per_week: Mapped[int | None]
     max_lessons_per_day: Mapped[int | None]

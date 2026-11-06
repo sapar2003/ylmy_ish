@@ -6,6 +6,7 @@ from app.api import scope as sc
 from app.api.auth import FacultyScope, require_admin
 from app.api.crud import DbSession, build_crud_router, check_owner, commit_or_raise, get_or_404
 from app.schemas import resources as s
+from app.services.accounts import clean_phone
 
 router = APIRouter()
 
@@ -52,7 +53,7 @@ def replace_availability(teacher_id: int, items: list[s.AvailabilityItem], db: D
 build_crud_router(
     model=m.Teacher, create_schema=s.TeacherCreate, update_schema=s.TeacherUpdate,
     read_schema=s.TeacherRead, prefix="/teachers", tag="Mugallym", filters=("department_id",),
-    router=teachers, scope=sc.TEACHER,
+    router=teachers, scope=sc.TEACHER, validate=clean_phone,
 )
 router.include_router(teachers)
 
