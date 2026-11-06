@@ -4,6 +4,7 @@ import '../api.dart';
 import '../theme.dart';
 import 'journal.dart';
 import 'login.dart';
+import 'student.dart';
 import 'topic.dart';
 
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
@@ -86,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_student) return const StudentHome();
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -212,6 +214,7 @@ class _ScheduleViewState extends State<ScheduleView> {
         ? lessons.where((e) => hhmm(e['starts_at']).compareTo(nowStr) <= 0 && hhmm(e['ends_at']).compareTo(nowStr) > 0).firstOrNull
         : null;
     final next = isToday && current == null ? lessons.where((e) => hhmm(e['starts_at']).compareTo(nowStr) > 0).firstOrNull : null;
+    final student = Api.instance.isStudent;
 
     return Column(children: [
       Container(
@@ -242,12 +245,25 @@ class _ScheduleViewState extends State<ScheduleView> {
           onRefresh: _load,
           child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: [
             Row(children: [
-              Expanded(child: Text(longDate(_day), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(longDate(_day), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  if (student && lessons.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text('${lessons.length} sapak · ${hhmm(lessons.first['starts_at'])}–${hhmm(lessons.last['ends_at'])}',
+                        style: const TextStyle(color: C.muted, fontSize: 13)),
+                  ],
+                ]),
+              ),
               if (_day != today && !(today.weekday == 7 && _day == today.add(const Duration(days: 1))))
                 TextButton(onPressed: () => _select(today.weekday == 7 ? today.add(const Duration(days: 1)) : today), child: const Text('Şu gün')),
             ]),
             if (_cached) const _OfflineNote(),
             const SizedBox(height: 8),
+            if (student && current != null) NextLessonCard(entry: current, now: true),
+            if (student && next != null) NextLessonCard(entry: next, now: false),
+            if (student && Api.instance.student?['subgroup_id'] == null && lessons.any((e) => e['subgroup'] != null))
+              const _NoSubgroupNote(),
             if (_loading && _week == null)
               const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
             else if (_error != null && _week == null)
@@ -536,6 +552,25 @@ class _ExamTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _NoSubgroupNote extends StatelessWidget {
+  const _NoSubgroupNote();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: const Color(0xFFFFFAEB), borderRadius: BorderRadius.circular(10)),
+        child: const Row(children: [
+          Icon(Icons.info_outline, size: 18, color: C.warning),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('Kiçi toparyňyz bellenmedik, şonuň üçin ähli kiçi toparlaryň sapaklary görünýär. Dekanata ýüz tutuň.',
+                style: TextStyle(fontSize: 13)),
+          ),
+        ]),
+      );
 }
 
 class _OfflineNote extends StatelessWidget {

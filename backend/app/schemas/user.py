@@ -21,6 +21,8 @@ class StudentInfo(BaseModel):
     subgroup_id: int | None = None
     subgroup: str | None = None
     faculty: str | None = None
+    course: int | None = None
+    phone: str | None = None
 
 
 class MeRead(BaseModel):

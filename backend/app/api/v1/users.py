@@ -50,7 +50,7 @@ def _student_info(db, user: m.User) -> s.StudentInfo | None:
     fac = db.get(m.Faculty, dep.faculty_id)
     return s.StudentInfo(id=st.id, name=st.full_name, group_id=group.id, group=group.name,
                          subgroup_id=sub.id if sub else None, subgroup=sub.name if sub else None,
-                         faculty=fac.short_name or fac.name)
+                         faculty=fac.short_name or fac.name, course=group.course, phone=st.phone)
 
 
 # --- giriş ---

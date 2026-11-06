@@ -49,6 +49,7 @@ def test_student_logs_in_with_otp_then_password(anon_client, monkeypatch):
     assert r.status_code == 200, r.text
     me = r.json()
     assert me["role"] == "student" and me["student"]["group_id"] == group["id"] and not me["has_password"]
+    assert me["student"]["phone"] == "+99365123456" and me["student"]["course"] == group["course"]
     # Kod bir gezek işleýär.
     assert c.post("/api/v1/auth/otp/verify", json={"phone": "65123456", "code": code}).status_code == 401
 

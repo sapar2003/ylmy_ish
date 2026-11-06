@@ -113,6 +113,12 @@ class Api {
 
   void enter() => loggedIn.value = true;
 
+  /// Profil maglumatlaryny serwerden täzeleýär.
+  Future<void> refreshMe() async {
+    me = await _send(http.get(_uri('auth/me'), headers: _headers)) as Map<String, dynamic>;
+    await _prefs.setString('me', jsonEncode(me));
+  }
+
   Future<void> _useServer(String serverUrl) async {
     if (kIsWeb) return;
     server = serverUrl.trim().replaceAll(RegExp(r'/+$'), '');
