@@ -1,9 +1,11 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'document.dart';
 
 const _extensions = ['pdf', 'ppt', 'pptx', 'pps', 'ppsx', 'odp', 'doc', 'docx', 'odt', 'xls', 'xlsx', 'txt', 'jpg',
     'jpeg', 'png', 'zip'];
@@ -14,6 +16,17 @@ Future<void> openTopicFile(BuildContext context, Map<String, dynamic> topic) asy
   if (!ok && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Faýly açyp bolmady.')));
   }
+}
+
+/// Faýly app-yň içinde açýar. Brauzerdäki görnüşde PDF brauzeriň özünde açylýar; görkezip bolmaýan faýl ýüklenýär.
+Future<void> openTopicPreview(BuildContext context, Map<String, dynamic> topic) async {
+  final url = topic['preview_url'];
+  if (url == null) return openTopicFile(context, topic);
+  if (kIsWeb) {
+    await launchUrl(Api.instance.fileUri('$url'));
+    return;
+  }
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen(topic: topic)));
 }
 
 String fileSize(int? bytes) {
@@ -51,7 +64,7 @@ class TopicLine extends StatelessWidget {
         if (topic['file_url'] != null) ...[
           if (text.isNotEmpty || topic['note'] != null) const SizedBox(height: 8),
           InkWell(
-            onTap: () => openTopicFile(context, topic),
+            onTap: () => openTopicPreview(context, topic),
             borderRadius: BorderRadius.circular(8),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -65,7 +78,7 @@ class TopicLine extends StatelessWidget {
                 ),
                 Text(fileSize(topic['file_size'] as int?), style: const TextStyle(fontSize: 12, color: C.subtle)),
                 const SizedBox(width: 6),
-                const Icon(Icons.download_outlined, size: 18, color: C.primary),
+                Icon(topic['preview_url'] != null ? Icons.chevron_right : Icons.download_outlined, size: 18, color: C.primary),
               ]),
             ),
           ),
@@ -168,7 +181,7 @@ class _TopicEditorState extends State<TopicEditor> {
           if (_saved?['file_url'] != null) ...[
             Row(children: [
               Expanded(child: TopicLine(topic: {'file_url': _saved!['file_url'], 'file_name': _saved!['file_name'],
-                  'file_size': _saved!['file_size']})),
+                  'file_size': _saved!['file_size'], 'preview': _saved!['preview'], 'preview_url': _saved!['preview_url']})),
               IconButton(
                 tooltip: 'Faýly aýyr',
                 onPressed: _busy

@@ -1,11 +1,21 @@
 from datetime import date, timedelta
 
 from app.core.config import settings
+from app.services import convert
 from tests.test_users import login, setup
 
 
 def test_teacher_sets_topic_and_file_students_see_it(anon_client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "upload_dir", str(tmp_path))
+    converted = []
+
+    def fake_soffice(source):  # LibreOffice-siz: netijäni simulirleýär
+        converted.append(source.suffix)
+        target = convert.pdf_path(source)
+        target.write_bytes(b"%PDF-fake")
+        return target
+
+    monkeypatch.setattr(convert, "ensure_pdf", fake_soffice)
     c = anon_client
     admin = setup(c)
     issued = c.post("/api/v1/users/teachers", json={}, headers=admin).json()
@@ -43,6 +53,9 @@ def test_teacher_sets_topic_and_file_students_see_it(anon_client, tmp_path, monk
     pub = c.get(f"/api/v1/public/timetable?group_id={group}&on={day}", headers=teacher).json()
     topic = next(t for t in pub["topics"] if t["assignment_id"] == entry["assignment_id"])
     assert topic["file_url"] == url
+    assert topic["preview"] == "pdf" and topic["preview_url"]
+    assert c.get(topic["preview_url"]).status_code == 401
+    assert c.get(topic["preview_url"], headers=teacher).content == b"%PDF-fake" and ".pptx" in converted
     assert c.get(url).status_code == 401  # giriş gerek
     assert c.get(url, headers=teacher).content == b"PPTX-DATA"
 
@@ -51,3 +64,10 @@ def test_teacher_sets_topic_and_file_students_see_it(anon_client, tmp_path, monk
     assert c.get(url, headers=teacher).status_code == 404
     assert c.put("/api/v1/me/topic", json={"entry_id": entry["id"], "day": day.isoformat(), "topic": ""},
                  headers=teacher).json() is None
+
+
+def test_preview_kind():
+    assert convert.preview_kind("a.PPTX") == "pdf"
+    assert convert.preview_kind("a.pdf") == "pdf"
+    assert convert.preview_kind("a.png") == "image"
+    assert convert.preview_kind("a.zip") is None

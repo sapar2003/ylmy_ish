@@ -14,3 +14,5 @@ class TopicRead(BaseModel):
     file_name: str | None = None
     file_size: int | None = None
     file_url: str | None = None  # serweriň salgysyna goşulýar
+    preview: str | None = None  # app-yň içinde: "pdf", "image"; None — diňe ýüklemek
+    preview_url: str | None = None

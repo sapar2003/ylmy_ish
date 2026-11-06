@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     mobile_dir: str | None = None  # mugallym app-ynyň web build bukjasy; berilse "/m" salgysyndan berilýär
     static_dir: str | None = None  # Flutter web build bukjasy; berilse "/" salgysyndan berilýär
     # Mugallymlaryň sapaga goýan faýllary (prezentasiýalar).
+    soffice_path: str | None = None  # LibreOffice; berilmese awtomatik gözlenýär
     upload_dir: str = str(Path(__file__).resolve().parents[2] / "uploads")
 
 

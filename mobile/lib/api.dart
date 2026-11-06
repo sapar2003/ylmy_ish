@@ -52,10 +52,10 @@ class Api {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
-  Future<dynamic> _send(Future<http.Response> request) async {
+  Future<dynamic> _send(Future<http.Response> request, {Duration timeout = const Duration(seconds: 15)}) async {
     final http.Response res;
     try {
-      res = await request.timeout(const Duration(seconds: 15));
+      res = await request.timeout(timeout);
     } catch (_) {
       throw ApiException('Serwere birikip bolmady. Wi-Fi/interneti we serweriň salgysyny barlaň.', offline: true);
     }
@@ -215,11 +215,31 @@ class Api {
   /// Faýl göni sorag bedeninde iberilýär (multipart gerek däl).
   Future<Map<String, dynamic>?> uploadTopicFile(int entryId, DateTime day, String name, List<int> bytes) async =>
       await _send(http.put(_uri('me/topic/file', {..._lessonQuery(entryId, day), 'name': name}),
-          headers: {..._headers, 'Content-Type': 'application/octet-stream'}, body: bytes)) as Map<String, dynamic>?;
+          headers: {..._headers, 'Content-Type': 'application/octet-stream'}, body: bytes),
+          timeout: const Duration(minutes: 3)) as Map<String, dynamic>?;
 
   Future<Map<String, dynamic>?> deleteTopicFile(int entryId, DateTime day) async =>
       await _send(http.delete(_uri('me/topic/file', _lessonQuery(entryId, day)), headers: _headers))
           as Map<String, dynamic>?;
+
+  /// App-yň içinde görkezilýän faýl (öwürmek wagt alyp biler, şonuň üçin garaşmak uzyn).
+  Future<Uint8List> downloadPreview(String path) async {
+    final http.Response res;
+    try {
+      res = await http.get(Uri.parse('$server$path'), headers: _headers).timeout(const Duration(minutes: 4));
+    } catch (_) {
+      throw ApiException('Serwere birikip bolmady. Interneti barlaň.', offline: true);
+    }
+    if (res.statusCode >= 400) {
+      Object? body;
+      try {
+        body = jsonDecode(utf8.decode(res.bodyBytes));
+      } catch (_) {}
+      final detail = body is Map ? body['detail'] : null;
+      throw ApiException(detail is String ? detail : 'Ýalňyşlyk ${res.statusCode}');
+    }
+    return res.bodyBytes;
+  }
 
   /// Serweriň berýän faýl salgysy (/api/v1/public/files/...) -> doly salgy.
   /// Faýl brauzerde açylýar, şonuň üçin token salgyda.
