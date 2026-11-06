@@ -58,3 +58,12 @@ def require_teacher(user: CurrentUser) -> m.User:
 
 
 TeacherUser = Annotated[m.User, Depends(require_teacher)]
+
+
+def require_student(user: CurrentUser) -> m.User:
+    if user.role != m.Role.student or user.student_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bu diňe talyp hasaby üçin.")
+    return user
+
+
+StudentUser = Annotated[m.User, Depends(require_student)]

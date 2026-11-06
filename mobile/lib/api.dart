@@ -174,6 +174,12 @@ class Api {
           as Map<String, dynamic>;
 
   /// `marks`: talybyň id-si → baha ("5", "4", "3", "2", "gm") ýa-da null (aýyrmak).
+  /// Talybyň öz bahalary (dersler boýunça).
+  Future<({List<Map<String, dynamic>> data, bool cached})> myMarks() async {
+    final r = await _cached('me/marks');
+    return (data: (r.data as List).cast<Map<String, dynamic>>(), cached: r.cached);
+  }
+
   // --- sapagyň temasy we faýly ---
   Map<String, String> _lessonQuery(int entryId, DateTime day) => {'entry_id': '$entryId', 'day': isoDate(day)};
 

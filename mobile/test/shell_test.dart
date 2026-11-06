@@ -42,7 +42,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('talyp: üç bölüm, Žurnal ýok', (tester) async {
+  testWidgets('talyp: dört bölüm, Žurnal ýerine Bahalar', (tester) async {
     await _open(tester, {
       'id': 2,
       'username': 'talyp1',
@@ -54,7 +54,8 @@ void main() {
     });
     expect(find.text('Salam, Aman'), findsOneWidget);
     expect(find.text('Žurnal'), findsNothing);
-    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    expect(find.text('Bahalar'), findsWidgets);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
 
     await tester.tap(find.text('Profil'));
     await tester.pump();

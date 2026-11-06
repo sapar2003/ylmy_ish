@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app import models as m
 from app.api import scope as sc
-from app.api.auth import CurrentUser, FacultyScope, TeacherUser, require_admin, require_staff
+from app.api.auth import CurrentUser, FacultyScope, StudentUser, TeacherUser, require_admin, require_staff
 from app.api.crud import DbSession, build_crud_router, check_owner, get_or_404
 from app.schemas.structure import ReadBase
 from app.services import journal as j
@@ -156,6 +156,41 @@ def my_journal(assignment_id: int, user: TeacherUser, db: DbSession):
     if tt is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Çap edilen raspisaniýe ýok.")
     return j.gradebook(db, tt, a)
+
+
+@me.get("/marks")
+def my_marks(user: StudentUser, db: DbSession):
+    """Talybyň diňe öz bahalary: talyp hasapdan alynýar, başga talybyň id-sini sorap bolmaýar.
+    Ähli dersleri (bahasyz hem) görkezýär; `can_change` — mugallym heniz üýtgedip bilýär (3 gün)."""
+    st = db.get(m.Student, user.student_id)
+    marks = list(db.scalars(select(m.Mark).where(m.Mark.student_id == st.id).order_by(m.Mark.day)))
+    ids = {mk.assignment_id for mk in marks}
+    tt = j.published_timetable(db)
+    if tt is not None:
+        for a_id in set(db.scalars(select(m.TimetableEntry.assignment_id).where(m.TimetableEntry.timetable_id == tt.id))):
+            a = db.get(m.TeachingAssignment, a_id)
+            item = db.get(m.CurriculumItem, a.curriculum_item_id)
+            gids = [g.id for g in db.get(m.Stream, item.stream_id).groups] if item.stream_id else [item.group_id]
+            if st.group_id in gids and (a.subgroup_id is None or a.subgroup_id == st.subgroup_id):
+                ids.add(a_id)
+    slots = {s.id: s for s in db.scalars(select(m.TimeSlot))}
+    today = date.today()
+    out = []
+    for a_id in ids:
+        a = db.get(m.TeachingAssignment, a_id)
+        item = db.get(m.CurriculumItem, a.curriculum_item_id)
+        own = [mk for mk in marks if mk.assignment_id == a_id]
+        nums = [int(mk.value.value) for mk in own if mk.value != m.MarkValue.absent]
+        out.append({
+            "assignment_id": a_id, "subject": db.get(m.Subject, item.subject_id).name,
+            "lesson_type": item.lesson_type.value, "teacher": db.get(m.Teacher, a.teacher_id).name,
+            "average": round(sum(nums) / len(nums), 2) if nums else None,
+            "absent": sum(1 for mk in own if mk.value == m.MarkValue.absent),
+            "marks": [{"day": mk.day.isoformat(), "time_slot_id": mk.time_slot_id, "value": mk.value.value,
+                       "starts_at": slots[mk.time_slot_id].starts_at.strftime("%H:%M"),
+                       "can_change": today <= j.deadline(mk.day)} for mk in own],
+        })
+    return sorted(out, key=lambda c: (c["subject"], c["lesson_type"]))
 
 
 router.include_router(me)

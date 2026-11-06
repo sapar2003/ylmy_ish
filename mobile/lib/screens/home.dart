@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'grades.dart';
 import 'journal.dart';
 import 'shell.dart';
 import 'topic.dart';
@@ -30,6 +31,7 @@ class ScheduleView extends StatefulWidget {
 class _ScheduleViewState extends State<ScheduleView> {
   DateTime _day = dayOnly(DateTime.now().weekday == 7 ? DateTime.now().add(const Duration(days: 1)) : DateTime.now());
   Map<String, dynamic>? _week;
+  List<Map<String, dynamic>> _marks = [];
   bool _cached = false;
   bool _loading = true;
   String? _error;
@@ -49,6 +51,11 @@ class _ScheduleViewState extends State<ScheduleView> {
     });
     try {
       final r = await Api.instance.week(_monday);
+      if (Api.instance.isStudent) {
+        try {
+          _marks = (await Api.instance.myMarks()).data;
+        } on ApiException catch (_) {} // bahasyz hem raspisaniýe görkezilýär
+      }
       if (!mounted) return;
       setState(() {
         _week = r.data;
@@ -62,6 +69,17 @@ class _ScheduleViewState extends State<ScheduleView> {
         _loading = false;
       });
     }
+  }
+
+  /// Talyp: şol sapagyň bahasy (sapak kartasynda görkezilýär).
+  String? _markOf(Map<String, dynamic> e, DateTime day) {
+    for (final c in _marks) {
+      if (c['assignment_id'] != e['assignment_id']) continue;
+      for (final m in (c['marks'] as List)) {
+        if (m['time_slot_id'] == e['time_slot_id'] && m['day'] == isoDate(day)) return '${m['value']}';
+      }
+    }
+    return null;
   }
 
   /// Sapagyň şol günki temasy (sapak: assignment + sene + wagt sloty).
@@ -156,6 +174,7 @@ class _ScheduleViewState extends State<ScheduleView> {
                   entry: e,
                   day: _day,
                   topic: _topicOf(e, _day),
+                  mark: student ? _markOf(e, _day) : null,
                   onReturn: _load,
                   badge: identical(e, current) ? 'Häzir' : (identical(e, next) ? 'Indiki' : null),
                 ),
@@ -200,7 +219,8 @@ class _ScheduleViewState extends State<ScheduleView> {
 }
 
 class _LessonTile extends StatelessWidget {
-  const _LessonTile({required this.entry, required this.day, this.badge, this.topic, this.onReturn});
+  const _LessonTile({required this.entry, required this.day, this.badge, this.topic, this.onReturn, this.mark});
+  final String? mark; // talybyň şu sapakdaky bahasy
   final Map<String, dynamic> entry;
   final DateTime day;
   final Map<String, dynamic>? topic; // mugallymyň goýan temasy we faýly
@@ -277,6 +297,14 @@ class _LessonTile extends StatelessWidget {
                         ],
                       ] else
                         _info(Icons.groups_outlined, '$groups$sub'),
+                      if (mark != null) ...[
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          const Text('Bahaňyz:', style: TextStyle(fontSize: 13.5, color: C.muted)),
+                          const SizedBox(width: 8),
+                          MarkBadge(mark!),
+                        ]),
+                      ],
                       if (topic != null) TopicLine(topic: topic!),
                       if (past) ...[
                         const SizedBox(height: 10),

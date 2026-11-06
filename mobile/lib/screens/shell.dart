@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../theme.dart';
+import 'grades.dart';
 import 'home.dart';
 import 'journal.dart';
 import 'login.dart';
@@ -35,6 +36,7 @@ class _MainShellState extends State<MainShell> {
         child: IndexedStack(index: _tab, children: [
           _Tab(header: _Greeting(), child: const ScheduleView()),
           if (teacher) const _Tab(header: _PageTitle('Žurnal', 'Dersleriňiz boýunça bahalar'), child: JournalView()),
+          if (!teacher) const _Tab(header: _PageTitle('Bahalar', 'Dersler boýunça öz bahalaryňyz'), child: GradesView()),
           _Tab(
             header: _PageTitle('Synaglar', teacher ? 'Uly ýa-da kiçi mugallym bolan synaglaryňyz' : 'Ara we ýarymýyllyk synaglaryňyz'),
             child: const ExamsView(),
@@ -50,6 +52,7 @@ class _MainShellState extends State<MainShell> {
           destinations: [
             const NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
             if (teacher) const NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
+            if (!teacher) const NavigationDestination(icon: Icon(Icons.grade_outlined), selectedIcon: Icon(Icons.grade), label: 'Bahalar'),
             const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
             const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
           ],

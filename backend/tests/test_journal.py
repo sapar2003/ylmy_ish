@@ -99,3 +99,44 @@ def test_teacher_marks_students(anon_client):
     group_id = c.get("/api/v1/groups?limit=500", headers=admin).json()["items"][0]["id"]
     assert isinstance(c.get(f"/api/v1/journal/courses?group_id={group_id}", headers=admin).json(), list)
     assert c.get(f"/api/v1/journal/{entry['assignment_id']}", headers=admin).json()["rows"]
+
+
+def test_student_sees_only_own_marks(anon_client):
+    c = anon_client
+    admin = setup(c)
+    assert c.post("/api/v1/students/demo", headers=admin).json()["created"] > 0
+    today = date.today()
+    tt = c.post("/api/v1/timetables", json={"name": "Güýz", "time_limit_seconds": 20, "weeks": 2,
+                                           "starts_on": (today - timedelta(days=60)).isoformat()}, headers=admin).json()
+    c.post(f"/api/v1/timetables/{tt['id']}/publish", json={"published": True}, headers=admin)
+    entries = c.get(f"/api/v1/timetables/{tt['id']}/entries", headers=admin).json()
+    # Geçen günleriň biri: şol günde bolýan sapak.
+    day, entry = next((d, e) for k in range(14) if (d := today - timedelta(days=k + 5))
+                      for e in c.get(f"/api/v1/timetables/{tt['id']}/entries?on={d}", headers=admin).json()
+                      if e["weekday"] == d.isoweekday())
+    assert entries
+    r = c.get(f"/api/v1/students?group_id={entry['groups'][0]['id']}&limit=500", headers=admin).json()["items"]
+    mine = next(s for s in r if entry["subgroup"] is None or s["subgroup_id"] == entry["subgroup"]["id"])
+    other = next(s for s in r if s["id"] != mine["id"] and (entry["subgroup"] is None or s["subgroup_id"] == entry["subgroup"]["id"]))
+    for s, value in ((mine, "5"), (other, "2")):
+        assert c.put(f"/api/v1/journal/{entry['assignment_id']}", json={
+            "student_id": s["id"], "day": day.isoformat(), "time_slot_id": entry["time_slot_id"], "value": value},
+            headers=admin).status_code == 200
+
+    assert c.patch(f"/api/v1/students/{mine['id']}", json={"phone": "65222222"}, headers=admin).status_code == 200
+    with client_session_factory[0]() as db:
+        from app.services.accounts import user_by_phone
+        user = user_by_phone(db, "+99365222222")
+        uid = user.id
+    from app.core.security import create_token
+    h = {"Authorization": f"Bearer {create_token(uid)}"}
+    assert c.get("/api/v1/me/marks").status_code == 401
+    assert c.get("/api/v1/me/marks", headers=admin).status_code == 403  # diňe talyp
+    data = c.get("/api/v1/me/marks", headers=h).json()
+    course = next(x for x in data if x["assignment_id"] == entry["assignment_id"])
+    assert [m["value"] for m in course["marks"]] == ["5"] and course["average"] == 5  # başga talybyň 2-si ýok
+    assert course["marks"][0]["day"] == day.isoformat() and course["marks"][0]["can_change"] is False
+    assert course["teacher"] and course["absent"] == 0
+    # Beýleki sahypalar ýapyk: talyp žurnaly we başga talyplary görüp bilmeýär.
+    assert c.get(f"/api/v1/journal/{entry['assignment_id']}", headers=h).status_code == 403
+    assert c.get("/api/v1/students", headers=h).status_code == 403
