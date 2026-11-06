@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'journal.dart';
-import 'login.dart';
-import 'student.dart';
+import 'shell.dart';
 import 'topic.dart';
 
 const weekdays = ['Duşenbe', 'Sişenbe', 'Çarşenbe', 'Penşenbe', 'Anna', 'Şenbe', 'Ýekşenbe'];
@@ -16,128 +15,6 @@ const lessonTypes = {'lecture': 'Leksiýa', 'practice': 'Amaly', 'lab': 'Tejribe
 String hhmm(String t) => t.substring(0, 5);
 String longDate(DateTime d) => '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  int _tab = 0;
-
-  bool get _student => Api.instance.isStudent;
-
-  /// Talyp üçin: "2 MH (Ç) · 1-nji kiçi topar".
-  String get _groupLabel {
-    final s = Api.instance.student ?? {};
-    return '${s['group'] ?? ''}${s['subgroup'] != null ? ' · ${s['subgroup']}-nji kiçi topar' : ''}';
-  }
-
-  String get _name => _student
-      ? '${Api.instance.student?['group'] ?? ''}'
-      : '${Api.instance.me?['teacher']?['name'] ?? Api.instance.me?['username'] ?? ''}';
-
-  /// "Gurbangylyçew Aman Öräýewiç" -> "Aman"; "Hudaýgulyýewa G." -> doly at.
-  String get _firstName {
-    final parts = _name.split(' ');
-    return parts.length > 1 && !parts[1].endsWith('.') ? parts[1] : _name;
-  }
-
-  void _profile() {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (c) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: C.primarySoft,
-                child: Text(_name.isEmpty ? '?' : _name[0], style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700)),
-              ),
-              title: Text(_student ? _groupLabel : _name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(_student ? 'Talyp · ${Api.instance.student?['faculty'] ?? ''}' : '${Api.instance.me?['username'] ?? ''}'),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.key_outlined),
-              title: Text(Api.instance.me?['has_password'] == false ? 'Parol goý' : 'Paroly çalyş'),
-              onTap: () {
-                Navigator.pop(c);
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ChangePasswordScreen(firstPassword: Api.instance.me?['has_password'] == false)));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, color: C.danger),
-              title: const Text('Çykmak', style: TextStyle(color: C.danger)),
-              onTap: () {
-                Navigator.pop(c);
-                Api.instance.logout();
-              },
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_student) return const StudentHome();
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(children: [
-          Container(
-            color: C.surface,
-            padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_student ? _groupLabel : 'Salam, $_firstName',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(longDate(DateTime.now()), style: const TextStyle(color: C.muted)),
-                ]),
-              ),
-              IconButton(
-                onPressed: _profile,
-                icon: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: C.primarySoft,
-                  child: Text(_name.isEmpty ? '?' : _name[0], style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ]),
-          ),
-          const Divider(),
-          Expanded(
-            child: IndexedStack(
-              index: _tab,
-              children: _student ? const [ScheduleView(), ExamsView()] : const [ScheduleView(), JournalView(), ExamsView()],
-            ),
-          ),
-        ]),
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.border))),
-        child: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: [
-            const NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
-            if (!_student) const NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
-            const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Raspisaniýe: hepdäniň günleri (zolak) + saýlanan günüň sapaklary
@@ -248,7 +125,7 @@ class _ScheduleViewState extends State<ScheduleView> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(longDate(_day), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  if (student && lessons.isNotEmpty) ...[
+                  if (lessons.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text('${lessons.length} sapak · ${hhmm(lessons.first['starts_at'])}–${hhmm(lessons.last['ends_at'])}',
                         style: const TextStyle(color: C.muted, fontSize: 13)),
@@ -260,8 +137,8 @@ class _ScheduleViewState extends State<ScheduleView> {
             ]),
             if (_cached) const _OfflineNote(),
             const SizedBox(height: 8),
-            if (student && current != null) NextLessonCard(entry: current, now: true),
-            if (student && next != null) NextLessonCard(entry: next, now: false),
+            if (current != null) NextLessonCard(entry: current, now: true),
+            if (next != null) NextLessonCard(entry: next, now: false),
             if (student && Api.instance.student?['subgroup_id'] == null && lessons.any((e) => e['subgroup'] != null))
               const _NoSubgroupNote(),
             if (_loading && _week == null)

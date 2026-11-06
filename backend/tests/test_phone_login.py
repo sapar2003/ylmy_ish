@@ -85,3 +85,4 @@ def test_wrong_codes_lock_and_duplicate_phone(anon_client, monkeypatch):
     code = re.search(r"\d{6}", sent[-1][1]).group()
     me = c.post("/api/v1/auth/otp/verify", json={"phone": "65111111", "code": code}).json()
     assert me["role"] == "teacher" and me["teacher"]["id"] == teacher["id"]
+    assert me["teacher_info"]["phone"] == "+99365111111" and me["teacher_info"]["department"]

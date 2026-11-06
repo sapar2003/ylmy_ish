@@ -25,6 +25,14 @@ class StudentInfo(BaseModel):
     phone: str | None = None
 
 
+class TeacherInfo(BaseModel):
+    """Mugallymyň app-daky profili."""
+    position: str | None = None
+    department: str | None = None
+    faculty: str | None = None
+    phone: str | None = None
+
+
 class MeRead(BaseModel):
     id: int
     username: str
@@ -32,6 +40,7 @@ class MeRead(BaseModel):
     teacher: Ref | None
     faculty: Ref | None = None  # dekan üçin
     student: StudentInfo | None = None
+    teacher_info: TeacherInfo | None = None
     has_password: bool = True
     must_change_password: bool
 

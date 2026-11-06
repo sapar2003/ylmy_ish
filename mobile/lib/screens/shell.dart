@@ -3,17 +3,18 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../theme.dart';
 import 'home.dart';
+import 'journal.dart';
 import 'login.dart';
 
-/// Talybyň esasy ekrany: aşakda üç bölüm — Raspisaniýe, Synaglar, Profil.
-class StudentHome extends StatefulWidget {
-  const StudentHome({super.key});
+/// Esasy ekran. Aşaky menýu: Raspisaniýe, (mugallymda Žurnal), Synaglar, Profil.
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
 
   @override
-  State<StudentHome> createState() => _StudentHomeState();
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _StudentHomeState extends State<StudentHome> {
+class _MainShellState extends State<MainShell> {
   int _tab = 0;
 
   @override
@@ -26,13 +27,18 @@ class _StudentHomeState extends State<StudentHome> {
 
   @override
   Widget build(BuildContext context) {
+    final teacher = !Api.instance.isStudent;
     return Scaffold(
       body: SafeArea(
         bottom: false,
         // const däl: refreshMe-den soň salam we profil täze maglumat bilen çyzylýar.
         child: IndexedStack(index: _tab, children: [
           _Tab(header: _Greeting(), child: const ScheduleView()),
-          const _Tab(header: _PageTitle('Synaglar', 'Ara we ýarymýyllyk synaglaryňyz'), child: ExamsView()),
+          if (teacher) const _Tab(header: _PageTitle('Žurnal', 'Dersleriňiz boýunça bahalar'), child: JournalView()),
+          _Tab(
+            header: _PageTitle('Synaglar', teacher ? 'Uly ýa-da kiçi mugallym bolan synaglaryňyz' : 'Ara we ýarymýyllyk synaglaryňyz'),
+            child: const ExamsView(),
+          ),
           ProfileView(),
         ]),
       ),
@@ -41,10 +47,11 @@ class _StudentHomeState extends State<StudentHome> {
         child: NavigationBar(
           selectedIndex: _tab,
           onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
-            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
+          destinations: [
+            const NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Raspisaniýe'),
+            if (teacher) const NavigationDestination(icon: Icon(Icons.grading_outlined), selectedIcon: Icon(Icons.grading), label: 'Žurnal'),
+            const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Synaglar'),
+            const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
           ],
         ),
       ),
@@ -61,10 +68,15 @@ class _Tab extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [header, const Divider(), Expanded(child: child)]);
 }
 
+/// "Gurbangylyçew Aman Öräýewiç" -> "Aman"; "Hudaýgulyýewa G." -> doly at.
 String _firstName(String fullName) {
   final parts = fullName.trim().split(RegExp(r'\s+'));
-  return parts.length > 1 ? parts[1] : fullName;
+  return parts.length > 1 && !parts[1].endsWith('.') ? parts[1] : fullName;
 }
+
+String get _myName => Api.instance.isStudent
+    ? '${Api.instance.student?['name'] ?? ''}'
+    : '${Api.instance.me?['teacher']?['name'] ?? Api.instance.me?['username'] ?? ''}';
 
 class _Greeting extends StatelessWidget {
   const _Greeting();
@@ -72,15 +84,18 @@ class _Greeting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Api.instance.student ?? {};
+    final info = Api.instance.me?['teacher_info'] as Map<String, dynamic>?;
+    final line = Api.instance.isStudent
+        ? '${s['group'] ?? ''}${s['subgroup'] != null ? ' · ${s['subgroup']}-nji kiçi topar' : ''}'
+        : '${info?['position'] ?? 'Mugallym'}${info?['faculty'] != null ? ' · ${info!['faculty']}' : ''}';
     return Container(
       width: double.infinity,
       color: C.surface,
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Salam, ${_firstName('${s['name'] ?? ''}')}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        Text('Salam, ${_firstName(_myName)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
-        Text('${s['group'] ?? ''}${s['subgroup'] != null ? ' · ${s['subgroup']}-nji kiçi topar' : ''}',
-            style: const TextStyle(color: C.muted)),
+        Text(line, style: const TextStyle(color: C.muted)),
       ]),
     );
   }
@@ -136,16 +151,26 @@ class NextLessonCard extends StatelessWidget {
         ]),
         const SizedBox(height: 6),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.person_outline, size: 16, color: light),
+          Icon(Api.instance.isStudent ? Icons.person_outline : Icons.groups_outlined, size: 16, color: light),
           const SizedBox(width: 6),
-          Expanded(child: Text('${entry['teacher']['name']}', style: const TextStyle(color: light))),
+          Expanded(
+            child: Text(
+              Api.instance.isStudent
+                  ? '${entry['teacher']['name']}'
+                  : (entry['stream'] != null
+                      ? '${entry['stream']['name']}'
+                      : (entry['groups'] as List).map((g) => g['name']).join(', ')) +
+                      (entry['subgroup'] != null ? ' · ${entry['subgroup']['name']}-nji kiçi topar' : ''),
+              style: const TextStyle(color: light),
+            ),
+          ),
         ]),
       ]),
     );
   }
 }
 
-/// Profil: talybyň maglumatlary, parol we çykmak.
+/// Profil: mugallymyň ýa-da talybyň maglumatlary, parol we çykmak.
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
 
@@ -177,8 +202,10 @@ class _ProfileViewState extends State<ProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    final student = Api.instance.isStudent;
     final s = Api.instance.student ?? {};
-    final name = '${s['name'] ?? ''}';
+    final info = (Api.instance.me?['teacher_info'] as Map<String, dynamic>?) ?? {};
+    final name = _myName;
     final initials = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0]).join();
     final first = Api.instance.me?['has_password'] == false;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 24, 16, 24), children: [
@@ -192,20 +219,23 @@ class _ProfileViewState extends State<ProfileView> {
       const SizedBox(height: 14),
       Text(name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
       const SizedBox(height: 4),
-      const Text('Talyp', textAlign: TextAlign.center, style: TextStyle(color: C.muted)),
+      Text(student ? 'Talyp' : '${info['position'] ?? 'Mugallym'}', textAlign: TextAlign.center, style: const TextStyle(color: C.muted)),
       const SizedBox(height: 24),
       Card(
         child: Column(children: [
-          _InfoRow(Icons.groups_outlined, 'Topar', '${s['group'] ?? '—'}'),
-          const Divider(),
-          _InfoRow(Icons.group_work_outlined, 'Kiçi topar', s['subgroup'] != null ? '${s['subgroup']}-nji kiçi topar' : 'Bellenmedik'),
-          const Divider(),
-          _InfoRow(Icons.school_outlined, 'Kurs', s['course'] != null ? '${s['course']}-nji kurs' : '—'),
-          const Divider(),
-          _InfoRow(Icons.account_balance_outlined, 'Fakultet', '${s['faculty'] ?? '—'}'),
-          if (s['phone'] != null) ...[
+          if (student) ...[
+            _InfoRow(Icons.groups_outlined, 'Topar', '${s['group'] ?? '—'}'),
             const Divider(),
-            _InfoRow(Icons.phone_outlined, 'Telefon', '${s['phone']}'),
+            _InfoRow(Icons.group_work_outlined, 'Kiçi topar', s['subgroup'] != null ? '${s['subgroup']}-nji kiçi topar' : 'Bellenmedik'),
+            const Divider(),
+            _InfoRow(Icons.school_outlined, 'Kurs', s['course'] != null ? '${s['course']}-nji kurs' : '—'),
+          ] else
+            _InfoRow(Icons.apartment_outlined, 'Kafedra', '${info['department'] ?? '—'}'),
+          const Divider(),
+          _InfoRow(Icons.account_balance_outlined, 'Fakultet', '${(student ? s['faculty'] : info['faculty']) ?? '—'}'),
+          if ((student ? s['phone'] : info['phone']) != null) ...[
+            const Divider(),
+            _InfoRow(Icons.phone_outlined, 'Telefon', '${student ? s['phone'] : info['phone']}'),
           ],
         ]),
       ),
@@ -229,7 +259,7 @@ class _ProfileViewState extends State<ProfileView> {
         ]),
       ),
       const SizedBox(height: 16),
-      const Text('Maglumat ýalňyş bolsa, dekanata ýüz tutuň.', textAlign: TextAlign.center, style: TextStyle(color: C.subtle, fontSize: 13)),
+      Text(student ? 'Maglumat ýalňyş bolsa, dekanata ýüz tutuň.' : 'Maglumat ýalňyş bolsa, okuw bölümine ýüz tutuň.', textAlign: TextAlign.center, style: const TextStyle(color: C.subtle, fontSize: 13)),
     ]);
   }
 }

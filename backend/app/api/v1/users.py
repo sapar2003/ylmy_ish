@@ -36,7 +36,17 @@ def _me(db, user: m.User) -> s.MeRead:
     faculty = db.get(m.Faculty, user.faculty_id) if user.faculty_id else None
     return s.MeRead(id=user.id, username=user.username, role=user.role, must_change_password=user.must_change_password,
                     teacher=_ref(teacher), faculty=_ref(faculty), student=_student_info(db, user),
+                    teacher_info=_teacher_info(db, teacher),
                     has_password=bool(user.password_hash))
+
+
+def _teacher_info(db, teacher: m.Teacher | None) -> s.TeacherInfo | None:
+    if teacher is None:
+        return None
+    dep = db.get(m.Department, teacher.department_id)
+    fac = db.get(m.Faculty, dep.faculty_id) if dep else None
+    return s.TeacherInfo(position=teacher.position, department=dep.name if dep else None,
+                         faculty=(fac.short_name or fac.name) if fac else None, phone=teacher.phone)
 
 
 def _student_info(db, user: m.User) -> s.StudentInfo | None:
