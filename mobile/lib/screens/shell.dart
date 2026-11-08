@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -220,6 +221,27 @@ class _ProfileViewState extends State<ProfileView> {
     if (mounted) setState(() {});
   }
 
+  /// Serweriň salgysy: awatara uzak basyp açylýar (kompýuteriň salgysy üýtgände).
+  Future<void> _server() async {
+    if (kIsWeb) return;
+    final ctl = TextEditingController(text: Api.instance.server);
+    final v = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Serweriň salgysy'),
+        content: TextField(controller: ctl, keyboardType: TextInputType.url, autocorrect: false),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Ýatyr')),
+          TextButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('Ýatda sakla')),
+        ],
+      ),
+    );
+    if (v != null && v.isNotEmpty) {
+      await Api.instance.setServer(v);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Serwer: ${Api.instance.server}')));
+    }
+  }
+
   Future<void> _logout() async {
     final yes = await showDialog<bool>(
       context: context,
@@ -245,10 +267,13 @@ class _ProfileViewState extends State<ProfileView> {
     final first = Api.instance.me?['has_password'] == false;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 24, 16, 24), children: [
       Center(
-        child: CircleAvatar(
+        child: GestureDetector(
+          onLongPress: _server,
+          child: CircleAvatar(
           radius: 42,
           backgroundColor: C.primary,
           child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700)),
+        ),
         ),
       ),
       const SizedBox(height: 14),

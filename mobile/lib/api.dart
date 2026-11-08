@@ -119,6 +119,9 @@ class Api {
     await _prefs.setString('me', jsonEncode(me));
   }
 
+  /// Serweriň salgysyny üýtgetmek (kompýuteriň salgysy üýtgände; profilden).
+  Future<void> setServer(String serverUrl) => _useServer(serverUrl);
+
   Future<void> _useServer(String serverUrl) async {
     if (kIsWeb) return;
     server = serverUrl.trim().replaceAll(RegExp(r'/+$'), '');

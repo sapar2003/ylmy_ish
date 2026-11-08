@@ -11,3 +11,4 @@ hasaplar*.csv
 
 # mugallymlaryň ýükleýän faýllary
 backend/uploads/
+backend/sms_kody.txt
