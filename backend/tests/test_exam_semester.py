@@ -70,5 +70,15 @@ def test_compact_group_first_days_without_gaps():
     slot = {s.id: s for s in slots}
     days = sorted({s.day for s in slots})
     got = sorted(slot[p.slot_id].day for p in res.placements if p.exam_key.startswith("c"))
-    assert got == days[1:5]  # 2-nji günden başlap yzygider
-    assert all(slot[p.slot_id].number == 2 for p in res.placements if p.exam_key.startswith("c"))
+    assert got == [days[1], days[3], days[5], days[7]]  # maslahat, synag, maslahat, synag ... goşmaça boş günsüz
+
+
+def test_consultation_day_never_relaxed():
+    slots = _slots(date(2027, 1, 12), 6)  # 6 iş güni: maslahat+synag bilen iň köp 3 synag
+    rooms = [Room(id=1, capacity=30, room_type_id=1)]
+    exams = [ExamItem(key=f"e{k}", group_ids=(1,), teacher_ids=(10 + k,), size=20, examiner_id=10 + k,
+                      label=f"2 MH (Ç) · D{k} · M{k}") for k in range(4)]
+    res = solve_exams(ExamInput(slots=slots, rooms=rooms, exams=exams, rest_days=1, consultations=True,
+                                time_limit_seconds=5, workers=2))
+    assert not res.ok and res.status == "precheck_failed"
+    assert "2 MH (Ç)" in res.issues[0] and "8 iş güni" in res.issues[0]

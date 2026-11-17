@@ -48,7 +48,7 @@ class ExamItem:
     label: str = ""
     examiner_id: int | None = None  # maslahaty berýän uly mugallym
     fixed_room_id: int | None = None  # toparyň öz otagy
-    compact: bool = False  # ilkinji günlere, boş günsüz (toparyň dynç we maslahat güni düzgünleri ýok)
+    compact: bool = False  # ilkinji günlere: maslahat güni → synag güni → maslahat güni ... goşmaça boş günsüz
 
 
 @dataclass
@@ -120,7 +120,15 @@ def exam_precheck(inp: ExamInput) -> list[str]:
             per_teacher[t] += 1
     names = _group_names(inp)
     cap = len(days) * inp.max_per_day
+    strict = _strict_capacity(inp, days) if inp.consultations else None
     for g, n in _per_group(inp).items():
+        if strict is not None and n > strict:
+            issues.append(
+                f"{names.get(g, f'Topar id={g}')}: {n} synag bar. Her synagdan öň aýry maslahat güni gerek "
+                f"(maslahat bilen synag bir günde bolmaýar), şonuň üçin iň az {2 * n} iş güni gerek, möwsümde "
+                f"{len(days)} iş güni bar (iň köp {strict} synag sygýar). Möwsümi iň az {max(1, 2 * n - len(days))} "
+                f"iş güni uzaldyň ýa-da synag sanyny azaldyň.")
+            continue
         if n > cap:
             issues.append(f"{names.get(g, f'Topar id={g}')}: {n} synag bar, ýöne möwsümde diňe {len(days)} synag "
                           f"güni bar. Möwsümi iň az {n - len(days)} iş güni uzaldyň.")
@@ -139,9 +147,8 @@ def strict_warnings(inp: ExamInput) -> list[str]:
     names = _group_names(inp)
     why = "her synagdan öň maslahat güni we " if inp.consultations else ""
     out = []
-    compact = {g for e in inp.exams if e.compact for g in e.group_ids}
     for g, n in _per_group(inp).items():
-        if n > cap and g not in compact:
+        if n > cap:
             need = 2 * n + 1 if inp.consultations else n * (inp.rest_days + 1)
             out.append(f"{names.get(g, f'Topar id={g}')}: {n} synag bar, {why}synaglaryň arasynda boş gün bilen "
                        f"möwsümde iň köp {cap} synag sygýar (takmynan {need} iş güni gerek, möwsümde {len(days)}).")
@@ -204,17 +211,11 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
     for i, e in enumerate(inp.exams):
         vars_ = []
         for s in inp.slots:
-            first_day = inp.consultations and prev_day[s.day] is None
-            if first_day and not relaxed:
-                continue  # maslahat güni ýok
-            if e.compact and inp.consultations and s.number == first_number and len(numbers) > 1:
-                continue  # 08:30-da öňki synagyň maslahaty bolup biler: synag soňky wagtda
+            if inp.consultations and prev_day[s.day] is None:
+                continue  # maslahat güni ýok (bu düzgün hiç haçan ýumşadylmaýar)
             v = model.new_bool_var(f"e_{i}_{s.id}")
             if e.compact:
                 penalties.append(W_EARLY * day_index[s.day] * v)
-            if first_day:
-                penalties.append(W_RELAX * v)
-                violations.append((e.group_ids[0], f"{s.day:%d.%m} möwsümiň ilkinji güni (maslahatsyz)", v))
             x[i, s.id] = v
             vars_.append(v)
             by_slot[s.id].append((e, v))
@@ -266,17 +267,15 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
             penalties.append(W_RELAX * both)
             violations.append((g, what, both))
 
-        if g in compact_groups:  # ilkinji günlere, boş günsüz: diňe günde bir synag
-            continue
         for i, d in enumerate(days):
-            if inp.consultations and prev_day[d] is not None:  # maslahat güni synagsyz
-                soft_or_hard(has_exam[d], has_exam[prev_day[d]], f"{prev_day[d]:%d.%m} maslahat güni synag bar")
+            if inp.consultations and prev_day[d] is not None:  # maslahat güni synagsyz (hemişe gaty)
+                model.add_bool_or([has_exam[d].Not(), has_exam[prev_day[d]].Not()])
             for d2 in days[i + 1:]:
                 gap = (d2 - d).days - 1  # arasyndaky boş günler
                 if gap < inp.rest_days:
                     if not (inp.consultations and prev_day[d2] == d):  # ýokarda eýýäm goşuldy
                         soft_or_hard(has_exam[d], has_exam[d2], f"{d:%d.%m}–{d2:%d.%m} arasynda boş gün ýok")
-                elif gap < inp.spread_days:
+                elif gap < inp.spread_days and g not in compact_groups:  # "ilkinji günler" toparyna däl
                     both = model.new_bool_var("")
                     model.add_bool_and([has_exam[d], has_exam[d2]]).only_enforce_if(both)
                     model.add_bool_or([has_exam[d].Not(), has_exam[d2].Not()]).only_enforce_if(both.Not())
@@ -332,9 +331,11 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
             got = sorted(day_index[slot_day[sid]] for sid, idxs in chosen.items() for i in idxs
                          if g in inp.exams[i].group_ids)
             dates = ", ".join(f"{days[k]:%d.%m}" for k in got)
-            if got and got != list(range(got[0], got[0] + len(got))):
-                issues.append(f"{names.get(g, f'Topar id={g}')}: synaglar ilkinji günlere goýuldy, ýöne mugallym "
-                              f"ýa-da otag çaknyşmasy sebäpli doly yzygider bolmady: {dates}")
+            step = 2 if inp.consultations else 1  # maslahat güni, synag güni, maslahat güni...
+            first = 1 if inp.consultations else 0
+            if got and got != list(range(first, first + step * len(got), step)):
+                issues.append(f"{names.get(g, f'Topar id={g}')}: synaglar iň ir günlere goýuldy, ýöne mugallym "
+                              f"ýa-da otag çaknyşmasy sebäpli arasynda goşmaça boş gün galdy: {dates}")
     for sid, idxs in chosen.items():
         loose = {i: inp.exams[i] for i in idxs if fixed[i] is None}
         rooms = assign_rooms(free_rooms or inp.rooms, loose) if loose else {}
