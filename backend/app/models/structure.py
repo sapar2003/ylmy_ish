@@ -75,6 +75,7 @@ class Group(IdMixin, TimestampMixin, Base):
     student_count: Mapped[int] = mapped_column(default=0)
     specialty_id: Mapped[int] = mapped_column(ForeignKey("specialties.id", ondelete="RESTRICT"), index=True)
     shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id", ondelete="RESTRICT"))
+    home_room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id", ondelete="SET NULL"))  # synag otagy
 
     specialty: Mapped[Specialty] = relationship(back_populates="groups")
     subgroups: Mapped[list["Subgroup"]] = relationship(

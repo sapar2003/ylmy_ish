@@ -98,6 +98,7 @@ class GroupCreate(BaseModel):
     student_count: int = Field(default=0, ge=0)
     specialty_id: int
     shift_id: int | None = None
+    home_room_id: int | None = None
 
 
 class GroupUpdate(BaseModel):
@@ -106,6 +107,7 @@ class GroupUpdate(BaseModel):
     student_count: int | None = Field(default=None, ge=0)
     specialty_id: int | None = None
     shift_id: int | None = None
+    home_room_id: int | None = None
 
 
 class GroupRead(ReadBase, GroupCreate):

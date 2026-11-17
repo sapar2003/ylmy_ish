@@ -93,12 +93,13 @@ const resources = <ResourceSpec>[
       FieldSpec('ends_at', 'Gutarýar', type: FieldType.time),
     ],
   ),
-  ResourceSpec(endpoint: 'groups', description: 'Talyp toparlary: kursy, talyp sany we smenasy. Smena bellenmese, topar islendik wagtda okap biler.', title: 'Toparlar', singular: 'Topar', fields: [
+  ResourceSpec(endpoint: 'groups', description: 'Talyp toparlary: kursy, talyp sany, smenasy we öz otagy. Smena bellenmese, topar islendik wagtda okap biler. Öz otagy bellense, ýarymýyllyk synaglar şol otagda geçýär.', title: 'Toparlar', singular: 'Topar', fields: [
     FieldSpec('name', 'Ady'),
     FieldSpec('course', 'Kurs', type: FieldType.integer),
     FieldSpec('student_count', 'Talyp sany', type: FieldType.integer),
     FieldSpec('specialty_id', 'Hünär', type: FieldType.ref, ref: 'specialties'),
     FieldSpec('shift_id', 'Smena', type: FieldType.ref, ref: 'shifts', required: false),
+    FieldSpec('home_room_id', 'Öz otagy (synag)', type: FieldType.ref, ref: 'rooms', required: false),
   ]),
   ResourceSpec(endpoint: 'subgroups', description: 'Kiçi toparlar: tejribe sapaklarynda topar bölünende (meselem, 1-nji we 2-nji kiçi topar).', title: 'Kiçi toparlar', singular: 'Kiçi topar', fields: [
     FieldSpec('name', 'Ady'),
@@ -170,7 +171,7 @@ const resources = <ResourceSpec>[
       FieldSpec('room_type_id', 'Otag görnüşi', type: FieldType.ref, ref: 'room-types', required: false),
     ],
   ),
-  ResourceSpec(endpoint: 'exam-sessions', description: 'Synag möwsümleri (ara synag, ýarymýyllyk synag...): başlanýan we gutarýan senesi, synag günleri.', title: 'Synag möwsümleri', singular: 'Synag möwsümi', fields: [
+  ResourceSpec(endpoint: 'exam-sessions', description: 'Synag möwsümleri (ara synag, ýarymýyllyk synag...): başlanýan we gutarýan senesi, synag günleri. "Maslahat" bellense, her synagdan öňki iş güni 08:30-da maslahat goýulýar.', title: 'Synag möwsümleri', singular: 'Synag möwsümi', fields: [
     FieldSpec('name', 'Ady'),
     FieldSpec('kind', 'Görnüşi', type: FieldType.choice, choices: examKinds),
     FieldSpec('starts_on', 'Başlanýar', type: FieldType.date),
@@ -178,6 +179,7 @@ const resources = <ResourceSpec>[
     FieldSpec('weekdays', 'Synag günleri', type: FieldType.weekdays),
     FieldSpec('max_per_day', 'Toparyň günde iň köp synagy', type: FieldType.integer),
     FieldSpec('rest_days', 'Synaglaryň arasynda boş gün', type: FieldType.integer),
+    FieldSpec('consultations', 'Synagdan öňki gün maslahat', type: FieldType.boolean, required: false),
   ]),
   ResourceSpec(endpoint: 'exam-periods', description: 'Synag möwsüminiň synag wagtlary (meselem, 08:30, 10:00, 11:40).', title: 'Synag wagtlary', singular: 'Synag wagty', fields: [
     FieldSpec('session_id', 'Möwsüm', type: FieldType.ref, ref: 'exam-sessions'),

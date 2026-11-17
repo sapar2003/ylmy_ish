@@ -349,6 +349,28 @@ class ExamLesson:
     room: str | None
     day: date
     start: str
+    kind: str = "exam"  # "exam" | "consult"
+
+
+def home_room_label(name: str | None) -> str:
+    """"V-301" -> "V (bina)-301" (Word faýllaryndaky ýaly)."""
+    if not name:
+        return ""
+    if "-" in name and name.split("-", 1)[0].isalpha() and len(name.split("-", 1)[0]) == 1:
+        a, b = name.split("-", 1)
+        return f"{a} (bina)-{b}"
+    return name
+
+
+def add_consultations(exams: list[ExamLesson], days: list[date]) -> list[ExamLesson]:
+    """Her synagdan öňki iş güni 08:30-da uly mugallymyň maslahaty."""
+    prev = {d: days[i - 1] for i, d in enumerate(days) if i}
+    out = list(exams)
+    for x in exams:
+        if x.kind == "exam" and x.day in prev:
+            out.append(ExamLesson(key=-x.key, groups=x.groups, subject=x.subject, examiner=x.examiner,
+                                  assistant=None, room=None, day=prev[x.day], start="08:30", kind="consult"))
+    return out
 
 
 def exam_lessons(db: Session, sch: m.ExamSchedule) -> list[ExamLesson]:
@@ -371,15 +393,18 @@ def exam_lessons(db: Session, sch: m.ExamSchedule) -> list[ExamLesson]:
     ]
 
 
-def exam_paras(x: ExamLesson, size: float) -> list[Para]:
+def exam_paras(x: ExamLesson, size: float, home: dict[int, str] | None = None) -> list[Para]:
     hh, mm = x.start.split(":")
-    paras = [Para([Run(f"Synag {hh}", bold=True), Run(mm, bold=True, superscript=True)], align="center", size=size),
+    word = "Maslahat" if x.kind == "consult" else "Synag"
+    paras = [Para([Run(f"{word} {hh}", bold=True), Run(mm, bold=True, superscript=True)], align="center", size=size),
              Para([Run(x.subject)], align="center", size=size)]
-    if x.room:
+    if home is None and x.room:  # ara synag: otag öňki ýaly aýry setirde
         paras.append(Para([Run(x.room)], align="center", size=size))
     paras.append(Para([Run(short_teacher(x.examiner))], align="center", size=size))
     if x.assistant:
         paras.append(Para([Run(short_teacher(x.assistant))], align="center", size=size))
+    if home is not None and x.room and x.room != home.get(x.groups[0]):  # öz otagynda däl bolsa
+        paras.append(Para([Run(f"({x.room})")], align="center", size=size))
     return paras
 
 
@@ -392,6 +417,11 @@ def exam_page(db: Session, session: m.ExamSession, exams: list[ExamLesson], days
     sz = 8 if o.mini else 10
     banner_sz = 10 if o.mini else 14
     kind_upper, kind_word = EXAM_KIND.get(session.kind.value, EXAM_KIND["other"])
+    final = session.consultations
+    rooms = {r.id: r.name for r in db.scalars(select(m.Room))}
+    home = {i.group.id: rooms.get(i.group.home_room_id) for i in infos} if final else None
+    if final:
+        kind_word = "Synag döwrüniň"
 
     total = 15134
     date_w = 1384
@@ -400,7 +430,10 @@ def exam_page(db: Session, session: m.ExamSession, exams: list[ExamLesson], days
     rows = [
         Row([Cell([Para([Run("Topar", bold=True)], align="center", size=sz)])]
             + [Cell([Para([Run(f"{i.group.name} ({i.group.student_count}-talyp)", bold=True)], align="center",
-                         size=sz)], vmerge="restart") for i in infos], height=488, header=True),
+                         size=sz)]
+                    + ([Para([Run(home_room_label(home.get(i.group.id)), bold=True)], align="center", size=sz)]
+                       if home and home.get(i.group.id) else []), vmerge="restart") for i in infos],
+            height=488, header=True),
         Row([Cell([Para([Run("Günler", bold=True)], align="center", size=sz)])]
             + [Cell(vmerge="continue") for _ in infos], height=425, header=True),
     ]
@@ -440,7 +473,7 @@ def exam_page(db: Session, session: m.ExamSession, exams: list[ExamLesson], days
                     continue
                 vm = "restart" if (val == last and k - 1 > last) else None
                 x = next((e for e in lst if e.key == key), None)
-                cells.append(Cell(exam_paras(x, sz) if x else [], span=span, vmerge=vm))
+                cells.append(Cell(exam_paras(x, sz, home) if x else [], span=span, vmerge=vm))
             rows.append(Row(cells, height=683 if not o.mini else None))
 
     specs = specialties(infos)
@@ -456,13 +489,16 @@ def exam_page(db: Session, session: m.ExamSession, exams: list[ExamLesson], days
         p(f"{o.academic_year}-nji okuw ýylynyň {o.semester} ýarymýyllygy", size=title_sz, align="center", after=80),
         Table(widths=widths, rows=rows),
         p("", size=4),
-        *signatures("Bellik:  Hasaplar we synaglar gün tertibinde görkezilen wagtda başlanýar.", o),
+        *signatures("Bellik:  Synaglar gün tertibinde görkezilen wagtynda başlanýar." if final
+                    else "Bellik:  Hasaplar we synaglar gün tertibinde görkezilen wagtda başlanýar.", o),
     ]
 
 
 def exam_docx(db: Session, sch: m.ExamSchedule, days: list[date], pages: list[list[int]], o: DocOptions) -> bytes:
     session = db.get(m.ExamSession, sch.session_id)
     exams = exam_lessons(db, sch)
+    if session.consultations:
+        exams = add_consultations(exams, days)
     blocks = []
     for i, group_ids in enumerate(pages):
         if i:

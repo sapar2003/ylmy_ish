@@ -48,14 +48,17 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
             owner = groups[e.group_id].name
         size = sum(groups[g].student_count for g in group_ids)
         teacher_ids = tuple(t for t in (e.examiner_id, e.assistant_id) if t is not None)
+        home = groups[group_ids[0]].home_room_id if len(group_ids) == 1 and e.room_type_id is None else None
         items.append(ExamItem(
             key=str(e.id), group_ids=tuple(group_ids), teacher_ids=teacher_ids, size=max(size, 1),
             room_type_id=e.room_type_id, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             label=f"{owner} · {subjects[e.subject_id].name} · {teachers[e.examiner_id].name}",
+            examiner_id=e.examiner_id, fixed_room_id=home,
         ))
     inp = ExamInput(
         slots=slots, rooms=solver_rooms(db), exams=items, max_per_day=session.max_per_day,
-        rest_days=session.rest_days, time_limit_seconds=time_limit_seconds,
+        rest_days=session.rest_days, consultations=session.consultations,
+        spread_days=session.rest_days + 2 if session.consultations else 0, time_limit_seconds=time_limit_seconds,
     )
     return inp, warnings
 
