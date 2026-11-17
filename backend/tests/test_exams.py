@@ -55,8 +55,14 @@ def test_rest_days_between_exams():
     assert all((b - a).days >= 2 for a, b in zip(used, used[1:]))
 
 
-def test_too_many_exams_reported_before_solving():
-    _, r = solve([exam(f"e{i}", [1], [i]) for i in range(4)], rest_days=1)  # 5 günde iň köp 3 synag
+def test_rest_days_relaxed_when_they_do_not_fit():
+    # 5 günde boş gün bilen iň köp 3 synag: düzgün ýumşadylýar we bu barada duýduryş berilýär
+    _, r = solve([exam(f"e{i}", [1], [i]) for i in range(4)], rest_days=1)
+    assert r.ok and any("iň köp 3" in i for i in r.issues), r.issues
+
+
+def test_more_exams_than_days_reported_before_solving():
+    _, r = solve([exam(f"e{i}", [1], [i]) for i in range(6)], rest_days=1)  # 5 gün, 6 synag
     assert not r.ok and r.status == "precheck_failed"
 
 
