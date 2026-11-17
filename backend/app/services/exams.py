@@ -37,6 +37,7 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
     subjects = {s.id: s for s in db.scalars(select(m.Subject))}
     teachers = {t.id: t for t in db.scalars(select(m.Teacher))}
     faculty_of = group_faculties(db)
+    compact = set(session.compact_group_ids or [])
 
     items = []
     for e in db.scalars(select(m.Exam).where(m.Exam.session_id == session.id).order_by(m.Exam.id)):
@@ -53,7 +54,7 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
             key=str(e.id), group_ids=tuple(group_ids), teacher_ids=teacher_ids, size=max(size, 1),
             room_type_id=e.room_type_id, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             label=f"{owner} · {subjects[e.subject_id].name} · {teachers[e.examiner_id].name}",
-            examiner_id=e.examiner_id, fixed_room_id=home,
+            examiner_id=e.examiner_id, fixed_room_id=home, compact=bool(compact) and set(group_ids) <= compact,
         ))
     inp = ExamInput(
         slots=slots, rooms=solver_rooms(db), exams=items, max_per_day=session.max_per_day,

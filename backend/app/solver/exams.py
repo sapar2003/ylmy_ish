@@ -26,6 +26,7 @@ W_TEACHER_SAME_DAY = 3  # mugallymyň bir günde ikinji synagy
 W_LATE = 1  # her wagt belgisi üçin: ir synaglar gowy
 W_SPREAD = 4  # toparyň iki synagynyň arasy `spread_days`-dan az
 W_RELAX = 300  # ýumşadylan gaty düzgün (maslahat güni, boş gün) bozulsa
+W_EARLY = 60  # "ilkinji günlere" toparyň synagy her gün giç düşse
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class ExamItem:
     label: str = ""
     examiner_id: int | None = None  # maslahaty berýän uly mugallym
     fixed_room_id: int | None = None  # toparyň öz otagy
+    compact: bool = False  # ilkinji günlere, boş günsüz (toparyň dynç we maslahat güni düzgünleri ýok)
 
 
 @dataclass
@@ -137,8 +139,9 @@ def strict_warnings(inp: ExamInput) -> list[str]:
     names = _group_names(inp)
     why = "her synagdan öň maslahat güni we " if inp.consultations else ""
     out = []
+    compact = {g for e in inp.exams if e.compact for g in e.group_ids}
     for g, n in _per_group(inp).items():
-        if n > cap:
+        if n > cap and g not in compact:
             need = 2 * n + 1 if inp.consultations else n * (inp.rest_days + 1)
             out.append(f"{names.get(g, f'Topar id={g}')}: {n} synag bar, {why}synaglaryň arasynda boş gün bilen "
                        f"möwsümde iň köp {cap} synag sygýar (takmynan {need} iş güni gerek, möwsümde {len(days)}).")
@@ -188,6 +191,9 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
     consults = defaultdict(list)  # (mugallym, gün) -> şol gün maslahat bermeli synaglar
     slot_of = {(s.day, s.number): s.id for s in inp.slots}
     first_number = min(s.number for s in inp.slots)
+    numbers = {s.number for s in inp.slots}
+    day_index = {d: i for i, d in enumerate(days)}
+    compact_groups = {g for e in inp.exams if e.compact for g in e.group_ids}
     violations = []  # ýumşadylan düzgünler: (topar, düşündiriş, bool var)
     shared = defaultdict(set)
     for e in inp.exams:
@@ -201,7 +207,11 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
             first_day = inp.consultations and prev_day[s.day] is None
             if first_day and not relaxed:
                 continue  # maslahat güni ýok
+            if e.compact and inp.consultations and s.number == first_number and len(numbers) > 1:
+                continue  # 08:30-da öňki synagyň maslahaty bolup biler: synag soňky wagtda
             v = model.new_bool_var(f"e_{i}_{s.id}")
+            if e.compact:
+                penalties.append(W_EARLY * day_index[s.day] * v)
             if first_day:
                 penalties.append(W_RELAX * v)
                 violations.append((e.group_ids[0], f"{s.day:%d.%m} möwsümiň ilkinji güni (maslahatsyz)", v))
@@ -256,6 +266,8 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
             penalties.append(W_RELAX * both)
             violations.append((g, what, both))
 
+        if g in compact_groups:  # ilkinji günlere, boş günsüz: diňe günde bir synag
+            continue
         for i, d in enumerate(days):
             if inp.consultations and prev_day[d] is not None:  # maslahat güni synagsyz
                 soft_or_hard(has_exam[d], has_exam[prev_day[d]], f"{prev_day[d]:%d.%m} maslahat güni synag bar")
@@ -313,6 +325,16 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
                 broken[g].append(what)
         for g, whats in broken.items():
             issues.append(f"{names.get(g, f'Topar id={g}')}: düzgün ýumşadyldy — " + "; ".join(sorted(set(whats))))
+    if compact_groups:
+        names = _group_names(inp)
+        slot_day = {s.id: s.day for s in inp.slots}
+        for g in compact_groups:
+            got = sorted(day_index[slot_day[sid]] for sid, idxs in chosen.items() for i in idxs
+                         if g in inp.exams[i].group_ids)
+            dates = ", ".join(f"{days[k]:%d.%m}" for k in got)
+            if got and got != list(range(got[0], got[0] + len(got))):
+                issues.append(f"{names.get(g, f'Topar id={g}')}: synaglar ilkinji günlere goýuldy, ýöne mugallym "
+                              f"ýa-da otag çaknyşmasy sebäpli doly yzygider bolmady: {dates}")
     for sid, idxs in chosen.items():
         loose = {i: inp.exams[i] for i in idxs if fixed[i] is None}
         rooms = assign_rooms(free_rooms or inp.rooms, loose) if loose else {}

@@ -180,6 +180,7 @@ const resources = <ResourceSpec>[
     FieldSpec('max_per_day', 'Toparyň günde iň köp synagy', type: FieldType.integer),
     FieldSpec('rest_days', 'Synaglaryň arasynda boş gün', type: FieldType.integer),
     FieldSpec('consultations', 'Synagdan öňki gün maslahat', type: FieldType.boolean, required: false),
+    FieldSpec('compact_group_ids', 'Ilkinji günlere, boş günsüz toparlar', type: FieldType.refList, ref: 'groups', required: false),
   ]),
   ResourceSpec(endpoint: 'exam-periods', description: 'Synag möwsüminiň synag wagtlary (meselem, 08:30, 10:00, 11:40).', title: 'Synag wagtlary', singular: 'Synag wagty', fields: [
     FieldSpec('session_id', 'Möwsüm', type: FieldType.ref, ref: 'exam-sessions'),

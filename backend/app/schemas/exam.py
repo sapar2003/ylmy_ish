@@ -25,6 +25,7 @@ class ExamSessionCreate(BaseModel):
     max_per_day: int = Field(default=1, ge=1, le=4, description="Bir toparyň günde iň köp synagy")
     rest_days: int = Field(default=0, ge=0, le=7, description="Toparyň iki synagynyň arasynda iň az boş gün")
     consultations: bool = Field(default=False, description="Her synagdan öňki iş güni 08:30-da maslahat")
+    compact_group_ids: list[int] = Field(default=[], description="Ilkinji günlere, boş günsüz goýulýan toparlar")
 
     _weekdays = field_validator("weekdays")(_check_weekdays)
 
@@ -44,6 +45,7 @@ class ExamSessionUpdate(BaseModel):
     max_per_day: int | None = Field(default=None, ge=1, le=4)
     rest_days: int | None = Field(default=None, ge=0, le=7)
     consultations: bool | None = None
+    compact_group_ids: list[int] | None = None
 
     _weekdays = field_validator("weekdays")(_check_weekdays)
 

@@ -55,3 +55,20 @@ def test_parse_run_together_cell():
         ("uly mug.", "G", "Arrykowa"), ("mug.-öwr.", "M", "Annamyradow")]
     assert c.subject == "Obýekte gönükdirilen programmirleme"
     assert [(t.initial, t.surname) for t in c.teachers] == [("M", "Çüriýew"), (None, "Agajykowa")]
+
+
+def test_compact_group_first_days_without_gaps():
+    slots = _slots(date(2027, 1, 12), 10)
+    rooms = [Room(id=1, capacity=30, room_type_id=1), Room(id=2, capacity=30, room_type_id=1)]
+    exams = [ExamItem(key=f"c{k}", group_ids=(1,), teacher_ids=(10 + k,), size=20, examiner_id=10 + k,
+                      fixed_room_id=1, compact=True) for k in range(4)]
+    exams += [ExamItem(key=f"n{k}", group_ids=(2,), teacher_ids=(20 + k,), size=20, examiner_id=20 + k,
+                       fixed_room_id=2) for k in range(3)]
+    res = solve_exams(ExamInput(slots=slots, rooms=rooms, exams=exams, rest_days=1, consultations=True,
+                                spread_days=3, time_limit_seconds=10, workers=2))
+    assert res.ok, res.issues
+    slot = {s.id: s for s in slots}
+    days = sorted({s.day for s in slots})
+    got = sorted(slot[p.slot_id].day for p in res.placements if p.exam_key.startswith("c"))
+    assert got == days[1:5]  # 2-nji günden başlap yzygider
+    assert all(slot[p.slot_id].number == 2 for p in res.placements if p.exam_key.startswith("c"))

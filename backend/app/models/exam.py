@@ -40,6 +40,8 @@ class ExamSession(IdMixin, TimestampMixin, Base):
     rest_days: Mapped[int] = mapped_column(default=0)  # toparyň iki synagynyň arasynda iň az boş gün
     # Her synagdan öňki iş güni 08:30-da maslahat (ýarymýyllyk synaglarda adaty)
     consultations: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Bu toparlaryň synaglary möwsümiň ilkinji günlerine, boş gün goýulman yzygider goýulýar
+    compact_group_ids: Mapped[list[int]] = mapped_column(JSON, default=list, server_default="[]")
 
     periods: Mapped[list["ExamPeriod"]] = relationship(
         back_populates="session", cascade="all, delete-orphan", passive_deletes=True, order_by="ExamPeriod.number"
