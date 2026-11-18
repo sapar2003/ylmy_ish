@@ -100,3 +100,20 @@ def test_latest_day_and_stay_close_to_previous():
     bad = solve_exams(ExamInput(slots=slots, rooms=rooms, exams=too_many, rest_days=1, consultations=True,
                                 time_limit_seconds=5, workers=2))
     assert not bad.ok and "2 MH (Ç)" in bad.issues[0]
+
+
+def test_consultation_day_before_session_start():
+    """Möwsüm 13.01 başlasa, ilkinji synagyň maslahaty 12.01 (möwsümden öň): 9 synag 17 iş gününe sygýar."""
+    slots = _slots(date(2027, 1, 13), 17)
+    rooms = [Room(id=1, capacity=30, room_type_id=1)]
+    exams = [ExamItem(key=f"m{k}", group_ids=(1,), teacher_ids=(10 + k,), size=20, examiner_id=10 + k,
+                      label=f"Mag 1 NGPYD (A) · D{k} · M") for k in range(9)]
+    base = dict(slots=slots, rooms=rooms, exams=exams, rest_days=1, consultations=True,
+                time_limit_seconds=10, workers=2)
+    assert not solve_exams(ExamInput(**base)).ok  # öňki maslahat günsüz sygmaýar
+    res = solve_exams(ExamInput(**base, consult_before=date(2027, 1, 12)))
+    assert res.ok, res.issues
+    slot = {s.id: s for s in slots}
+    days = sorted({s.day for s in slots})
+    got = sorted(slot[p.slot_id].day for p in res.placements)
+    assert got[0] == days[0] and got == days[0::2]  # synag, maslahat, synag ... boş gün ýok

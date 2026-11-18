@@ -10,7 +10,7 @@ from app.api.auth import FacultyScope
 from app.api.crud import NOT_YOURS, DbSession, get_or_404
 from app.api.scope import faculty_exam_sessions, faculty_groups
 from app.services.docx_export import DocOptions, exam_docx, timetable_docx
-from app.services.exams import exam_days
+from app.services.exams import doc_days
 
 router = APIRouter(tags=["Word"])
 
@@ -76,4 +76,4 @@ def exam_word(schedule_id: int, db: DbSession, q: Annotated[DocQuery, Query()], 
     session = db.get(m.ExamSession, sch.session_id)
     names = {g.id: g.name for g in db.query(m.Group).filter(m.Group.id.in_({g for pg in pages for g in pg}))}
     title = "Synag " + "; ".join(", ".join(names.get(g, "") for g in pg) for pg in pages[:3])
-    return _file(exam_docx(db, sch, exam_days(session), pages, _options(q)), title[:120])
+    return _file(exam_docx(db, sch, doc_days(session), pages, _options(q)), title[:120])

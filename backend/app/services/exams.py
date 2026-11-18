@@ -22,6 +22,23 @@ def exam_days(session: m.ExamSession) -> list:
     return days
 
 
+def consult_day_before(session: m.ExamSession):
+    """Möwsümden öňki iş güni: ilkinji synag gününiň maslahaty şol gün bolýar."""
+    d = session.starts_on - timedelta(days=1)
+    for _ in range(14):
+        if d.isoweekday() in session.weekdays:
+            return d
+        d -= timedelta(days=1)
+    return None
+
+
+def doc_days(session: m.ExamSession) -> list:
+    """Word/maslahat üçin günler: maslahat bolsa möwsümden öňki maslahat güni hem goşulýar."""
+    days = exam_days(session)
+    before = consult_day_before(session) if session.consultations else None
+    return [before, *days] if before else days
+
+
 def other_sessions_busy(db: Session, session: m.ExamSession, slots: list) -> tuple[frozenset, frozenset, list]:
     """Şol günlere düşýän beýleki möwsümleriň (çap edilen, ýok bolsa iň soňky düzülen) tertibindäki
     mugallymlar we otaglar: (id, gün, wagt belgisi). Maslahat (synagdan öňki iş güni 08:30) hem hasaba alynýar."""
@@ -30,7 +47,7 @@ def other_sessions_busy(db: Session, session: m.ExamSession, slots: list) -> tup
         p = next(pr for pr in session.periods if pr.id == s.period_id)
         number_of[s.day, p.starts_at] = s.number
     first = min((s.number for s in slots), default=1)
-    days = sorted({s.day for s in slots})
+    days = set(doc_days(session))  # maslahat güni hem (mugallym şol gün başga maslahatda bolmaz ýaly)
     teachers, rooms, used = set(), set(), []
     others = db.scalars(select(m.ExamSession).where(
         m.ExamSession.id != session.id, m.ExamSession.starts_on <= session.ends_on,
@@ -45,7 +62,7 @@ def other_sessions_busy(db: Session, session: m.ExamSession, slots: list) -> tup
         if sch is None:
             continue
         used.append(f"{other.name}: {sch.name}")
-        other_days = exam_days(other)
+        other_days = doc_days(other)
         prev = {d: other_days[i - 1] for i, d in enumerate(other_days) if i}
         rows = db.execute(select(m.ExamEntry, m.Exam, m.ExamPeriod)
                           .join(m.Exam, m.Exam.id == m.ExamEntry.exam_id)
@@ -119,6 +136,7 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
     inp = ExamInput(busy_teachers=busy_t, busy_rooms=busy_r, previous=previous,
         slots=slots, rooms=rooms, exams=items, max_per_day=session.max_per_day,
         rest_days=session.rest_days, consultations=session.consultations,
+        consult_before=consult_day_before(session) if session.consultations else None,
         spread_days=session.rest_days + 2 if session.consultations else 0, time_limit_seconds=time_limit_seconds,
     )
     return inp, warnings
