@@ -104,6 +104,21 @@ def get_schedule(schedule_id: int, db: DbSession, fid: FacultyScope):
     return _read(db, _visible(db, get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"), fid))
 
 
+@schedules.patch("/{schedule_id}", response_model=s.ExamScheduleRead, dependencies=[Depends(require_admin)])
+def update_schedule(schedule_id: int, payload: s.ExamScheduleUpdate, db: DbSession):
+    """Adyny üýtgetmek ýa-da arhiwe geçirmek/yzyna getirmek."""
+    sch = get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
+    if payload.archived and sch.published:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Çap edilen raspisaniýäni arhiwe geçirip bolmaýar. Ilki çap edilmesini aýyryň.")
+    if payload.name is not None:
+        sch.name = payload.name
+    if payload.archived is not None:
+        sch.archived = payload.archived
+    db.commit()
+    return _read(db, sch)
+
+
 @schedules.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_schedule(schedule_id: int, db: DbSession):
     db.delete(get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"))

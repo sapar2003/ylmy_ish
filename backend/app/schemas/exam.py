@@ -131,6 +131,12 @@ class ExamScheduleRead(BaseModel):
     created_at: datetime
     entry_count: int = 0
     published: bool = False
+    archived: bool = False
+
+
+class ExamScheduleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    archived: bool | None = None
 
 
 class ExamEntryRead(BaseModel):

@@ -106,6 +106,8 @@ class ExamSchedule(IdMixin, TimestampMixin, Base):
     seconds: Mapped[float | None] = mapped_column(Float)
     # Mugallymlar diňe çap edilen synag raspisaniýesini görýär; her möwsümde diňe biri çap edilen.
     published: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Köne wersiýalar arhiwe geçirilýär: sanawda gizlenýär, ýöne pozulmaýar.
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     entries: Mapped[list["ExamEntry"]] = relationship(
         back_populates="schedule", cascade="all, delete-orphan", passive_deletes=True

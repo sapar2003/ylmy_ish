@@ -219,6 +219,8 @@ def publish_exam_schedule(schedule_id: int, payload: s.PublishIn, db: DbSession)
                                                              m.ExamSchedule.published.is_(True))):
             other.published = False
     sch.published = payload.published
+    if payload.published:
+        sch.archived = False
     db.commit()
     return {"id": sch.id, "published": sch.published}
 

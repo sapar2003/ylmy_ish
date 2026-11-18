@@ -146,6 +146,7 @@ def run_exam_generation(session_factory: sessionmaker, schedule_id: int) -> None
                     for p in result.placements
                 )
             sch.status = m.TimetableStatus.done if result.ok else m.TimetableStatus.failed
+            sch.archived = not result.ok  # şowsuz düzüliş sanawda görünmeýär
             sch.solver_status = result.status
             sch.issues = warnings + result.issues
             sch.objective = result.objective
@@ -155,6 +156,7 @@ def run_exam_generation(session_factory: sessionmaker, schedule_id: int) -> None
             db.rollback()
             sch = db.get(m.ExamSchedule, schedule_id)
             sch.status = m.TimetableStatus.failed
+            sch.archived = True
             sch.issues = [f"Içki ýalňyşlyk: {exc}"]
         db.commit()
 

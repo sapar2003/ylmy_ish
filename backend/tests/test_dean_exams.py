@@ -58,3 +58,22 @@ def test_deans_see_only_own_exam_sessions_and_schedules(anon_client):
         # Synaglar: diňe öz toparlarynyňky
         exams = c.get("/api/v1/exams?limit=500", headers=dean).json()["items"]
         assert {e["session_id"] for e in exams} == {own_sess}
+
+
+def test_archive_rename_and_publish_rules(anon_client):
+    c = anon_client
+    from tests.test_users import setup
+    admin = setup(c)
+    dean, _ = _dean(c, admin, "IHT")
+    group = next(iter(_ids(c, "groups", dean)))
+    teacher = next(iter(_ids(c, "teachers", admin)))
+    subject = next(iter(_ids(c, "subjects", admin)))
+    _, sch = _session_with_exam(c, admin, "Synag C", group, teacher, subject)
+    url = f"/api/v1/exam-schedules/{sch}"
+    assert c.patch(url, json={"archived": True}, headers=dean).status_code == 403
+    r = c.patch(url, json={"archived": True, "name": "Köne"}, headers=admin)
+    assert r.status_code == 200 and r.json()["archived"] and r.json()["name"] == "Köne"
+    if c.get(url, headers=admin).json()["status"] == "done":
+        assert c.post(f"{url}/publish", json={"published": True}, headers=admin).status_code == 200
+        assert c.get(url, headers=admin).json()["archived"] is False  # çap edilen yzyna gelýär
+        assert c.patch(url, json={"archived": True}, headers=admin).status_code == 409

@@ -33,6 +33,7 @@ class _ExamPageState extends State<ExamPage> {
   final Map<ViewBy, Set<int>> _inSession = {};
   Timer? _poll;
   bool _loading = true;
+  bool _showArchived = false; // arhiwdäki köne wersiýalary hem görkezmek
 
   @override
   void initState() {
@@ -90,7 +91,11 @@ class _ExamPageState extends State<ExamPage> {
     setState(() {
       _periods = r[0] as List<Map<String, dynamic>>;
       _schedules = (r[1] as List).cast<Map<String, dynamic>>();
-      _current = _schedules.where((t) => t['status'] == 'done').firstOrNull ?? _schedules.firstOrNull;
+      final live = [for (final t in _schedules) if (t['archived'] != true) t];
+      _current = live.where((t) => t['published'] == true).firstOrNull ??
+          live.where((t) => t['status'] == 'done').firstOrNull ??
+          live.firstOrNull ??
+          _schedules.firstOrNull;
       _inSession[ViewBy.group] = {for (final e in exams) if (e['group_id'] != null) e['group_id'] as int};
       _inSession[ViewBy.teacher] = {
         for (final e in exams) ...[e['examiner_id'] as int, if (e['assistant_id'] != null) e['assistant_id'] as int],
@@ -139,6 +144,99 @@ class _ExamPageState extends State<ExamPage> {
     return m == null ? name : '${m.group(2)} · ${m.group(1)}';
   }
 
+  /// Sanawda görünýän wersiýalar: arhiwlenmedikler (+ saýlanan), täzesi ýokarda.
+  List<Map<String, dynamic>> get _shownSchedules => [
+        for (final t in _schedules)
+          if (_showArchived || t['archived'] != true || t['id'] == _current?['id']) t,
+      ];
+
+  int get _archivedCount => _schedules.where((t) => t['archived'] == true).length;
+
+  /// Gysga, düşnükli at: möwsümiň uzyn ady aýrylýar, sene we ýagdaý goşulýar.
+  String _scheduleLabel(Map<String, dynamic> t) {
+    var name = '${t['name']}'.trim();
+    final session = '${_session?['name'] ?? ''}';
+    if (session.isNotEmpty && name.startsWith(session)) {
+      name = name.substring(session.length).trim();
+      name = name.isEmpty || RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(name) ? 'Awtomat' : name;
+    }
+    final raw = '${t['created_at']}';
+    // Serwer UTC wagtyny zolaksyz berýär: ýerli wagta öwürýäris
+    final created = DateTime.tryParse(RegExp(r'(Z|[+-]\d{2}:?\d{2})$').hasMatch(raw) ? raw : '${raw}Z')?.toLocal();
+    final when = created == null
+        ? ''
+        : ' · ${_two(created.day)}.${_two(created.month)} ${_two(created.hour)}:${_two(created.minute)}';
+    final mark = t['published'] == true ? ' · ✓ çap edilen' : (t['archived'] == true ? ' · arhiwde' : '');
+    return '$name$when · ${_statusText(t)}$mark';
+  }
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+
+  Future<void> _scheduleAction(String action) async {
+    final sch = _current;
+    if (sch == null && action != 'toggle') return;
+    try {
+      switch (action) {
+        case 'toggle':
+          setState(() => _showArchived = !_showArchived);
+        case 'rename':
+          final ctl = TextEditingController(text: '${sch!['name']}');
+          final name = await showDialog<String>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text('Adyny üýtgetmek'),
+              content: SizedBox(width: 420, child: TextField(controller: ctl, autofocus: true)),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(c), child: const Text('Ýatyr')),
+                FilledButton(onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('Ýatda sakla')),
+              ],
+            ),
+          );
+          if (name == null || name.isEmpty) return;
+          _replace(await Api.instance.patch('exam-schedules/${sch['id']}', {'name': name}) as Map<String, dynamic>);
+        case 'archive':
+        case 'restore':
+          _replace(await Api.instance.patch('exam-schedules/${sch!['id']}', {'archived': action == 'archive'})
+              as Map<String, dynamic>);
+          if (action == 'archive' && !_showArchived) {
+            final next = _schedules.where((t) => t['archived'] != true && t['status'] == 'done').firstOrNull;
+            if (next != null) await _select(next['id'] as int);
+          }
+        case 'delete':
+          if (!await confirm(context,
+              '"${_scheduleLabel(sch!)}" doly pozulsynmy? Muny yzyna getirip bolmaýar. (Arhiwe geçirmek howpsuzrak.)')) {
+            return;
+          }
+          await Api.instance.delete('exam-schedules/${sch['id']}');
+          setState(() => _schedules = [for (final t in _schedules) if (t['id'] != sch['id']) t]);
+          final next = _shownSchedules.where((t) => t['status'] == 'done').firstOrNull ?? _shownSchedules.firstOrNull;
+          if (next != null) {
+            await _select(next['id'] as int);
+          } else {
+            setState(() {
+              _current = null;
+              _entries = [];
+            });
+          }
+      }
+    } on ApiException catch (e) {
+      if (mounted) showError(context, e.message);
+    }
+  }
+
+  void _replace(Map<String, dynamic> sch) => setState(() {
+        _schedules = [for (final t in _schedules) t['id'] == sch['id'] ? sch : t];
+        if (_current?['id'] == sch['id']) _current = sch;
+      });
+
+  Future<void> _select(int id) async {
+    setState(() => _current = _schedules.firstWhere((t) => t['id'] == id));
+    _watchCurrent();
+    await _loadSessionRooms();
+    _fixTarget();
+    _loadEntries();
+  }
+
   void _watchCurrent() {
     _poll?.cancel();
     final status = _current?['status'];
@@ -179,7 +277,8 @@ class _ExamPageState extends State<ExamPage> {
     final all = (check['issues'] as List).cast<String>();
     final issues = [for (final i in all) if (!_isInfo(i)) i];
     final infos = [for (final i in all) if (_isInfo(i)) i];
-    final nameCtl = TextEditingController(text: '${session['name']} ${DateTime.now().toString().substring(0, 16)}');
+    final now = DateTime.now();
+    final nameCtl = TextEditingController(text: 'Awtomat · ${_two(now.day)}.${_two(now.month)} ${_two(now.hour)}:${_two(now.minute)}');
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -287,24 +386,70 @@ class _ExamPageState extends State<ExamPage> {
             flex: 3,
             child: _schedules.isEmpty
                 ? const SizedBox()
-                : DropdownButton<int>(
-                    isExpanded: true,
-                    value: _current?['id'] as int?,
-                    items: [
-                      for (final t in _schedules)
-                        DropdownMenuItem(
-                          value: t['id'] as int,
-                          child: Text('${t['name']}  (${_statusText(t)})', overflow: TextOverflow.ellipsis),
+                : Row(children: [
+                    Expanded(
+                      child: Tooltip(
+                        message: _current == null ? '' : '${_current!['name']}',
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _current?['id'] as int?,
+                          items: [
+                            for (final t in _shownSchedules)
+                              DropdownMenuItem(
+                                value: t['id'] as int,
+                                child: Tooltip(
+                                  message: '${t['name']}',
+                                  waitDuration: const Duration(milliseconds: 600),
+                                  child: Text(
+                                    _scheduleLabel(t),
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: t['archived'] == true ? Colors.grey : null,
+                                      fontWeight: t['published'] == true ? FontWeight.w600 : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                          onChanged: (id) => id == null ? null : _select(id),
                         ),
-                    ],
-                    onChanged: (id) async {
-                      setState(() => _current = _schedules.firstWhere((t) => t['id'] == id));
-                      _watchCurrent();
-                      await _loadSessionRooms();
-                      _fixTarget();
-                      _loadEntries();
-                    },
-                  ),
+                      ),
+                    ),
+                    if (!Api.instance.isDean)
+                      PopupMenuButton<String>(
+                        tooltip: 'Wersiýalar',
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: _scheduleAction,
+                        itemBuilder: (_) => [
+                          if (_current != null)
+                            const PopupMenuItem(
+                                value: 'rename',
+                                child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Adyny üýtget'))),
+                          if (_current != null && _current!['archived'] != true && _current!['published'] != true)
+                            const PopupMenuItem(
+                                value: 'archive',
+                                child: ListTile(leading: Icon(Icons.archive_outlined), title: Text('Arhiwe geçir'))),
+                          if (_current?['archived'] == true)
+                            const PopupMenuItem(
+                                value: 'restore',
+                                child: ListTile(leading: Icon(Icons.unarchive_outlined), title: Text('Arhiwden yzyna getir'))),
+                          PopupMenuItem(
+                              value: 'toggle',
+                              child: ListTile(
+                                leading: Icon(_showArchived ? Icons.visibility_off_outlined : Icons.history),
+                                title: Text(_showArchived
+                                    ? 'Arhiwi gizle'
+                                    : 'Köne wersiýalary görkez ($_archivedCount)'),
+                              )),
+                          if (_current != null && _current!['published'] != true)
+                            const PopupMenuItem(
+                                value: 'delete',
+                                child: ListTile(
+                                    leading: Icon(Icons.delete_outline, color: Colors.red),
+                                    title: Text('Doly poz', style: TextStyle(color: Colors.red)))),
+                        ],
+                      ),
+                  ]),
           ),
           const SizedBox(width: 16),
           if (_current?['status'] == 'done' && !Api.instance.isDean) ...[
