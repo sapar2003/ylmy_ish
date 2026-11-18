@@ -26,6 +26,7 @@ class ExamSessionCreate(BaseModel):
     rest_days: int = Field(default=0, ge=0, le=7, description="Toparyň iki synagynyň arasynda iň az boş gün")
     consultations: bool = Field(default=False, description="Her synagdan öňki iş güni 08:30-da maslahat")
     compact_group_ids: list[int] = Field(default=[], description="Ilkinji günlere, boş günsüz goýulýan toparlar")
+    own_rooms_only: bool = Field(default=False, description="Her fakultet diňe öz otaglaryny ulanýar (umumy otagsyz)")
 
     _weekdays = field_validator("weekdays")(_check_weekdays)
 
@@ -46,6 +47,7 @@ class ExamSessionUpdate(BaseModel):
     rest_days: int | None = Field(default=None, ge=0, le=7)
     consultations: bool | None = None
     compact_group_ids: list[int] | None = None
+    own_rooms_only: bool | None = None
 
     _weekdays = field_validator("weekdays")(_check_weekdays)
 

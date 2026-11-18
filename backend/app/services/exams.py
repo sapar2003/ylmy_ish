@@ -101,8 +101,11 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
     busy_t, busy_r, used = other_sessions_busy(db, session, slots)
     if used:
         warnings.append("Beýleki möwsümleriň synaglary hasaba alyndy (mugallym we otag çaknyşmasyn): " + ", ".join(used))
+    rooms = solver_rooms(db)
+    if session.own_rooms_only:  # umumy (fakultetsiz) otaglar ulanylmaýar
+        rooms = [r for r in rooms if r.faculty_id is not None]
     inp = ExamInput(busy_teachers=busy_t, busy_rooms=busy_r,
-        slots=slots, rooms=solver_rooms(db), exams=items, max_per_day=session.max_per_day,
+        slots=slots, rooms=rooms, exams=items, max_per_day=session.max_per_day,
         rest_days=session.rest_days, consultations=session.consultations,
         spread_days=session.rest_days + 2 if session.consultations else 0, time_limit_seconds=time_limit_seconds,
     )

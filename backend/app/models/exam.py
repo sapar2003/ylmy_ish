@@ -41,6 +41,7 @@ class ExamSession(IdMixin, TimestampMixin, Base):
     # Her synagdan öňki iş güni 08:30-da maslahat (ýarymýyllyk synaglarda adaty)
     consultations: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Bu toparlaryň synaglary möwsümiň ilkinji günlerine, boş gün goýulman yzygider goýulýar
+    own_rooms_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # umumy otagsyz
     compact_group_ids: Mapped[list[int]] = mapped_column(JSON, default=list, server_default="[]")
 
     periods: Mapped[list["ExamPeriod"]] = relationship(
