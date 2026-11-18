@@ -48,6 +48,7 @@ class ExamItem:
     label: str = ""
     examiner_id: int | None = None  # maslahaty berýän uly mugallym
     fixed_room_id: int | None = None  # toparyň öz otagy
+    weekdays: frozenset[int] | None = None  # diňe şu hepde günlerinde
     compact: bool = False  # ilkinji günlere: maslahat güni → synag güni → maslahat güni ... goşmaça boş günsüz
 
 
@@ -60,6 +61,9 @@ class ExamInput:
     rest_days: int = 0
     consultations: bool = False
     spread_days: int = 0  # toparyň synaglarynyň arasynda islenýän boş gün (ýumşak)
+    # Beýleki möwsümleriň (meselem, başga fakultetiň) şol günlerdäki synaglary: (mugallym/otag, gün, wagt belgisi)
+    busy_teachers: frozenset = frozenset()
+    busy_rooms: frozenset = frozenset()
     time_limit_seconds: float = 60
     workers: int = 8
 
@@ -213,6 +217,15 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
         for s in inp.slots:
             if inp.consultations and prev_day[s.day] is None:
                 continue  # maslahat güni ýok (bu düzgün hiç haçan ýumşadylmaýar)
+            if e.weekdays and s.day.isoweekday() not in e.weekdays:
+                continue
+            if any((t, s.day, s.number) in inp.busy_teachers for t in e.teacher_ids):
+                continue  # mugallym başga möwsümiň synagynda
+            if (inp.consultations and e.examiner_id is not None
+                    and (e.examiner_id, prev_day[s.day], first_number) in inp.busy_teachers):
+                continue  # maslahat wagty mugallym başga synagda
+            if fixed[i] is not None and (fixed[i], s.day, s.number) in inp.busy_rooms:
+                continue
             v = model.new_bool_var(f"e_{i}_{s.id}")
             if e.compact:
                 penalties.append(W_EARLY * day_index[s.day] * v)
@@ -288,11 +301,17 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
 
     fixed_rooms = {r for r in fixed.values() if r is not None}
     free_rooms = [r for r in inp.rooms if r.id not in fixed_rooms]
+    slot_by_id = {s.id: s for s in inp.slots}
+
+    def open_rooms(sid):  # başga möwsümde eýelenmedik otaglar
+        s = slot_by_id[sid]
+        return [r for r in (free_rooms or inp.rooms) if (r.id, s.day, s.number) not in inp.busy_rooms]
+
     index = {id(e): i for i, e in enumerate(inp.exams)}
-    for here in by_slot.values():
+    for sid, here in by_slot.items():
         loose = [(e, v) for e, v in here if fixed[index[id(e)]] is None]
         if loose:
-            add_room_limits(model, free_rooms or inp.rooms, loose)
+            add_room_limits(model, open_rooms(sid), loose)
 
     model.minimize(sum(penalties))
     solver = cp_model.CpSolver()
@@ -338,7 +357,7 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
                               f"ýa-da otag çaknyşmasy sebäpli arasynda goşmaça boş gün galdy: {dates}")
     for sid, idxs in chosen.items():
         loose = {i: inp.exams[i] for i in idxs if fixed[i] is None}
-        rooms = assign_rooms(free_rooms or inp.rooms, loose) if loose else {}
+        rooms = assign_rooms(open_rooms(sid), loose) if loose else {}
         if rooms is None:
             issues.append(f"Synag wagty id={sid}: otaglary bölüp bolmady, synaglar otagsyz goýuldy.")
             rooms = {}

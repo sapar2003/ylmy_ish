@@ -196,5 +196,6 @@ const resources = <ResourceSpec>[
     FieldSpec('examiner_id', 'Uly mugallym', type: FieldType.ref, ref: 'teachers'),
     FieldSpec('assistant_id', 'Kiçi mugallym', type: FieldType.ref, ref: 'teachers', required: false),
     FieldSpec('room_type_id', 'Otag görnüşi', type: FieldType.ref, ref: 'room-types', required: false),
+    FieldSpec('weekdays', 'Diňe şu günlerde', type: FieldType.weekdays, required: false),
   ]),
 ];

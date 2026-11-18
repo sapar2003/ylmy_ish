@@ -22,6 +22,47 @@ def exam_days(session: m.ExamSession) -> list:
     return days
 
 
+def other_sessions_busy(db: Session, session: m.ExamSession, slots: list) -> tuple[frozenset, frozenset, list]:
+    """Şol günlere düşýän beýleki möwsümleriň (çap edilen, ýok bolsa iň soňky düzülen) tertibindäki
+    mugallymlar we otaglar: (id, gün, wagt belgisi). Maslahat (synagdan öňki iş güni 08:30) hem hasaba alynýar."""
+    number_of = {}  # (gün, başlanýan wagt) -> şu möwsümiň wagt belgisi
+    for s in slots:
+        p = next(pr for pr in session.periods if pr.id == s.period_id)
+        number_of[s.day, p.starts_at] = s.number
+    first = min((s.number for s in slots), default=1)
+    days = sorted({s.day for s in slots})
+    teachers, rooms, used = set(), set(), []
+    others = db.scalars(select(m.ExamSession).where(
+        m.ExamSession.id != session.id, m.ExamSession.starts_on <= session.ends_on,
+        m.ExamSession.ends_on >= session.starts_on))
+    for other in others:
+        sch = (db.scalar(select(m.ExamSchedule).where(m.ExamSchedule.session_id == other.id,
+                                                      m.ExamSchedule.published.is_(True))
+                         .order_by(m.ExamSchedule.id.desc()))
+               or db.scalar(select(m.ExamSchedule).where(m.ExamSchedule.session_id == other.id,
+                                                         m.ExamSchedule.status == m.TimetableStatus.done)
+                            .order_by(m.ExamSchedule.id.desc())))
+        if sch is None:
+            continue
+        used.append(f"{other.name}: {sch.name}")
+        other_days = exam_days(other)
+        prev = {d: other_days[i - 1] for i, d in enumerate(other_days) if i}
+        rows = db.execute(select(m.ExamEntry, m.Exam, m.ExamPeriod)
+                          .join(m.Exam, m.Exam.id == m.ExamEntry.exam_id)
+                          .join(m.ExamPeriod, m.ExamPeriod.id == m.ExamEntry.period_id)
+                          .where(m.ExamEntry.schedule_id == sch.id)).all()
+        for entry, exam, period in rows:
+            n = number_of.get((entry.day, period.starts_at))
+            for t in (exam.examiner_id, exam.assistant_id):
+                if t is not None and n is not None:
+                    teachers.add((t, entry.day, n))
+            if entry.room_id is not None and n is not None:
+                rooms.add((entry.room_id, entry.day, n))
+            if other.consultations and entry.day in prev and prev[entry.day] in days:
+                teachers.add((exam.examiner_id, prev[entry.day], first))
+    return frozenset(teachers), frozenset(rooms), used
+
+
 def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: float) -> tuple[ExamInput, list[str]]:
     warnings: list[str] = []
     slots, n = [], 0
@@ -55,8 +96,12 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
             room_type_id=e.room_type_id, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             label=f"{owner} · {subjects[e.subject_id].name} · {teachers[e.examiner_id].name}",
             examiner_id=e.examiner_id, fixed_room_id=home, compact=bool(compact) and set(group_ids) <= compact,
+            weekdays=frozenset(e.weekdays) if e.weekdays else None,
         ))
-    inp = ExamInput(
+    busy_t, busy_r, used = other_sessions_busy(db, session, slots)
+    if used:
+        warnings.append("Beýleki möwsümleriň synaglary hasaba alyndy (mugallym we otag çaknyşmasyn): " + ", ".join(used))
+    inp = ExamInput(busy_teachers=busy_t, busy_rooms=busy_r,
         slots=slots, rooms=solver_rooms(db), exams=items, max_per_day=session.max_per_day,
         rest_days=session.rest_days, consultations=session.consultations,
         spread_days=session.rest_days + 2 if session.consultations else 0, time_limit_seconds=time_limit_seconds,

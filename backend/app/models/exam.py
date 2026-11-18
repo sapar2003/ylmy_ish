@@ -84,6 +84,7 @@ class Exam(IdMixin, TimestampMixin, Base):
     examiner_id: Mapped[int] = mapped_column(ForeignKey("teachers.id", ondelete="RESTRICT"), index=True)
     assistant_id: Mapped[int | None] = mapped_column(ForeignKey("teachers.id", ondelete="RESTRICT"), index=True)
     room_type_id: Mapped[int | None] = mapped_column(ForeignKey("room_types.id", ondelete="RESTRICT"))
+    weekdays: Mapped[list[int] | None] = mapped_column(JSON)  # diňe şu günlerde (1=duşenbe ... 6=şenbe)
 
 
 class ExamSchedule(IdMixin, TimestampMixin, Base):
