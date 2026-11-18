@@ -106,6 +106,9 @@ class ListImporter:
             parts = t.name.replace(".", ". ").split()
             if parts and parts[0] == surname and (initial is None or (len(parts) > 1 and parts[1][0] == initial)):
                 hits.append(t)
+        exact = [t for t in hits if t.name == (f"{surname} {initial}." if initial else surname)]
+        if len(hits) > 1 and len(exact) == 1:
+            hits = exact  # öňki girizmede döredilen ýazgy
         if len(hits) == 1:
             obj = hits[0]
         else:

@@ -29,6 +29,8 @@ class _ExamPageState extends State<ExamPage> {
   int? _targetId;
   List<Map<String, dynamic>> _entries = [];
   Map<int, String> _teacherFaculty = {};
+  // Saýlanan möwsüme degişli toparlar, mugallymlar we otaglar (saýlawda diňe şular görkezilýär)
+  final Map<ViewBy, Set<int>> _inSession = {};
   Timer? _poll;
   bool _loading = true;
 
@@ -52,6 +54,7 @@ class _ExamPageState extends State<ExamPage> {
         Api.instance.list('teachers'),
         Api.instance.list('rooms'),
       ]);
+      final recent = await Api.instance.get('exam-schedules') as List;
       final faculties = await loadTeacherFaculties();
       if (!mounted) return;
       setState(() {
@@ -60,8 +63,9 @@ class _ExamPageState extends State<ExamPage> {
         _targets[ViewBy.group] = r[1];
         _targets[ViewBy.teacher] = r[2];
         _targets[ViewBy.room] = r[3];
-        _session ??= _sessions.lastOrNull;
-        _targetId ??= _targets[_viewBy]!.firstOrNull?['id'] as int?;
+        // Adaty: iň soňky düzülen synag raspisaniýesiniň möwsümi
+        final lastSessionId = recent.isEmpty ? null : (recent.first as Map)['session_id'];
+        _session ??= _sessions.where((s) => s['id'] == lastSessionId).firstOrNull ?? _sessions.lastOrNull;
         _loading = false;
       });
       await _loadSession();
@@ -79,15 +83,60 @@ class _ExamPageState extends State<ExamPage> {
     final r = await Future.wait([
       Api.instance.list('exam-periods', {'session_id': session['id']}),
       Api.instance.get('exam-schedules', {'session_id': session['id']}),
+      Api.instance.list('exams', {'session_id': session['id']}),
     ]);
     if (!mounted) return;
+    final exams = r[2] as List<Map<String, dynamic>>;
     setState(() {
       _periods = r[0] as List<Map<String, dynamic>>;
       _schedules = (r[1] as List).cast<Map<String, dynamic>>();
       _current = _schedules.where((t) => t['status'] == 'done').firstOrNull ?? _schedules.firstOrNull;
+      _inSession[ViewBy.group] = {for (final e in exams) if (e['group_id'] != null) e['group_id'] as int};
+      _inSession[ViewBy.teacher] = {
+        for (final e in exams) ...[e['examiner_id'] as int, if (e['assistant_id'] != null) e['assistant_id'] as int],
+      };
+      _inSession.remove(ViewBy.room);
     });
+    await _loadSessionRooms();
+    _fixTarget();
     _watchCurrent();
     _loadEntries();
+  }
+
+  /// Otaglar: saýlanan raspisaniýede ulanylan otaglar.
+  Future<void> _loadSessionRooms() async {
+    final sch = _current;
+    if (sch == null || sch['status'] != 'done') return;
+    final all = await Api.instance.get('exam-schedules/${sch['id']}/entries') as List;
+    if (!mounted) return;
+    setState(() => _inSession[ViewBy.room] = {
+          for (final e in all.cast<Map<String, dynamic>>())
+            if (e['room'] != null) (e['room'] as Map)['id'] as int,
+        });
+  }
+
+  List<Map<String, dynamic>> get _visibleTargets {
+    final all = _targets[_viewBy] ?? const [];
+    final allowed = _inSession[_viewBy];
+    if (allowed == null) return all;
+    return [for (final t in all) if (allowed.contains(t['id'])) t];
+  }
+
+  /// Saýlanan topar/mugallym/otag bu möwsümde ýok bolsa, birinjisini saýlaýar.
+  void _fixTarget() {
+    final visible = _visibleTargets;
+    if (!visible.any((t) => t['id'] == _targetId)) {
+      setState(() => _targetId = visible.firstOrNull?['id'] as int?);
+    }
+  }
+
+  static bool _isInfo(String issue) => issue.startsWith('Beýleki möwsümleriň synaglary hasaba alyndy');
+
+  /// "Ýarymýyllyk synaglar 2026/2027 I (YDF)" -> "YDF · Ýarymýyllyk synaglar 2026/2027 I"
+  static String _sessionLabel(Map<String, dynamic> s) {
+    final name = '${s['name']}';
+    final m = RegExp(r'^(.*?)\s*\(([^()]+)\)\s*$').firstMatch(name);
+    return m == null ? name : '${m.group(2)} · ${m.group(1)}';
   }
 
   void _watchCurrent() {
@@ -127,7 +176,9 @@ class _ExamPageState extends State<ExamPage> {
     final session = _session!;
     final check = await Api.instance.get('exam-schedules/precheck', {'session_id': session['id']}) as Map<String, dynamic>;
     if (!mounted) return;
-    final issues = (check['issues'] as List).cast<String>();
+    final all = (check['issues'] as List).cast<String>();
+    final issues = [for (final i in all) if (!_isInfo(i)) i];
+    final infos = [for (final i in all) if (_isInfo(i)) i];
     final nameCtl = TextEditingController(text: '${session['name']} ${DateTime.now().toString().substring(0, 16)}');
     final ok = await showDialog<bool>(
       context: context,
@@ -140,6 +191,15 @@ class _ExamPageState extends State<ExamPage> {
             const SizedBox(height: 16),
             Text('${check['exams']} synag, ${check['days']} gün, jemi ${check['slots']} synag wagty.'),
             const SizedBox(height: 8),
+            for (final i in infos)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.info_outline, color: Colors.blueGrey),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(i)),
+                ]),
+              ),
             if (issues.isEmpty)
               const Row(children: [
                 Icon(Icons.check_circle, color: Colors.green),
@@ -207,7 +267,7 @@ class _ExamPageState extends State<ExamPage> {
                   DropdownMenuItem(
                     value: s['id'] as int,
                     child: Text(
-                      '${s['name']} (${examKinds[s['kind']] ?? s['kind']})',
+                      '${_sessionLabel(s)} (${examKinds[s['kind']] ?? s['kind']})',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -237,9 +297,11 @@ class _ExamPageState extends State<ExamPage> {
                           child: Text('${t['name']}  (${_statusText(t)})', overflow: TextOverflow.ellipsis),
                         ),
                     ],
-                    onChanged: (id) {
+                    onChanged: (id) async {
                       setState(() => _current = _schedules.firstWhere((t) => t['id'] == id));
                       _watchCurrent();
+                      await _loadSessionRooms();
+                      _fixTarget();
                       _loadEntries();
                     },
                   ),
@@ -294,7 +356,7 @@ class _ExamPageState extends State<ExamPage> {
             onSelectionChanged: (s) {
               setState(() {
                 _viewBy = s.first;
-                _targetId = _targets[_viewBy]!.firstOrNull?['id'] as int?;
+                _targetId = _visibleTargets.firstOrNull?['id'] as int?;
               });
               _loadEntries();
             },
@@ -304,7 +366,7 @@ class _ExamPageState extends State<ExamPage> {
             value: _targetId,
             hint: const Text('Saýlaň'),
             items: [
-              for (final t in _targets[_viewBy]!)
+              for (final t in _visibleTargets)
                 DropdownMenuItem(
                   value: t['id'] as int,
                   child: Text(_viewBy == ViewBy.teacher ? withFaculty(t, _teacherFaculty) : '${t['name']}'),
@@ -353,7 +415,17 @@ class _ExamPageState extends State<ExamPage> {
             if (sch['status'] == 'running' || sch['status'] == 'pending')
               const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
           ]),
-          for (final i in issues.take(6)) Padding(padding: const EdgeInsets.only(left: 32, top: 4), child: Text('• $i')),
+          for (final i in issues.where((i) => !_isInfo(i)).take(6))
+            Padding(padding: const EdgeInsets.only(left: 32, top: 4), child: Text('• $i')),
+          for (final i in issues.where(_isInfo))
+            Padding(
+              padding: const EdgeInsets.only(left: 32, top: 4),
+              child: Row(children: [
+                const Icon(Icons.info_outline, size: 16, color: Colors.blueGrey),
+                const SizedBox(width: 6),
+                Expanded(child: Text(i, style: const TextStyle(color: Colors.blueGrey))),
+              ]),
+            ),
         ]),
       ),
     );
