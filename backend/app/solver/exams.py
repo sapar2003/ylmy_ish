@@ -26,6 +26,7 @@ W_TEACHER_SAME_DAY = 3  # mugallymyň bir günde ikinji synagy
 W_LATE = 1  # her wagt belgisi üçin: ir synaglar gowy
 W_SPREAD = 4  # toparyň iki synagynyň arasy `spread_days`-dan az
 W_RELAX = 300  # ýumşadylan gaty düzgün (maslahat güni, boş gün) bozulsa
+W_STAY = 6  # öňki raspisaniýedäki ýerinden süýşen synag (beýlekilere päsgel bermezlik üçin)
 W_EARLY = 60  # "ilkinji günlere" toparyň synagy her gün giç düşse
 
 
@@ -49,6 +50,7 @@ class ExamItem:
     examiner_id: int | None = None  # maslahaty berýän uly mugallym
     fixed_room_id: int | None = None  # toparyň öz otagy
     weekdays: frozenset[int] | None = None  # diňe şu hepde günlerinde
+    latest_day: date | None = None  # iň giç şu güne çenli
     compact: bool = False  # ilkinji günlere: maslahat güni → synag güni → maslahat güni ... goşmaça boş günsüz
 
 
@@ -64,6 +66,7 @@ class ExamInput:
     # Beýleki möwsümleriň (meselem, başga fakultetiň) şol günlerdäki synaglary: (mugallym/otag, gün, wagt belgisi)
     busy_teachers: frozenset = frozenset()
     busy_rooms: frozenset = frozenset()
+    previous: dict = field(default_factory=dict)  # öňki raspisaniýe: synag açary -> (gün, wagt belgisi)
     time_limit_seconds: float = 60
     workers: int = 8
 
@@ -136,6 +139,18 @@ def exam_precheck(inp: ExamInput) -> list[str]:
         if n > cap:
             issues.append(f"{names.get(g, f'Topar id={g}')}: {n} synag bar, ýöne möwsümde diňe {len(days)} synag "
                           f"güni bar. Möwsümi iň az {n - len(days)} iş güni uzaldyň.")
+    deadline: dict[int, date] = {}
+    for e in inp.exams:
+        if e.latest_day:
+            for g in e.group_ids:
+                deadline[g] = min(deadline.get(g, e.latest_day), e.latest_day)
+    per_group = _per_group(inp)
+    for g, last in deadline.items():
+        window = [d for d in days if d <= last]
+        cap = _strict_capacity(inp, window) if inp.consultations else len(window)
+        if per_group[g] > cap:
+            issues.append(f"{names.get(g, f'Topar id={g}')}: {per_group[g]} synag {last:%d.%m} çenli gutarmaly, "
+                          f"ýöne şol güne çenli iň köp {cap} synag sygýar. Senäni giçräk ediň.")
     for t, n in per_teacher.items():
         if n > len(inp.slots):
             issues.append(f"Mugallym id={t}: {n} synag bar, ýöne diňe {len(inp.slots)} synag wagty bar.")
@@ -219,6 +234,8 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
                 continue  # maslahat güni ýok (bu düzgün hiç haçan ýumşadylmaýar)
             if e.weekdays and s.day.isoweekday() not in e.weekdays:
                 continue
+            if e.latest_day and s.day > e.latest_day:
+                continue
             if any((t, s.day, s.number) in inp.busy_teachers for t in e.teacher_ids):
                 continue  # mugallym başga möwsümiň synagynda
             if (inp.consultations and e.examiner_id is not None
@@ -227,6 +244,8 @@ def _solve(inp: ExamInput, relaxed: bool, started: float) -> ExamResult:
             if fixed[i] is not None and (fixed[i], s.day, s.number) in inp.busy_rooms:
                 continue
             v = model.new_bool_var(f"e_{i}_{s.id}")
+            if inp.previous.get(e.key) not in (None, (s.day, s.number)):
+                penalties.append(W_STAY * v)
             if e.compact:
                 penalties.append(W_EARLY * day_index[s.day] * v)
             x[i, s.id] = v

@@ -90,6 +90,7 @@ class ExamCreate(BaseModel):
     assistant_id: int | None = Field(default=None, description="Kiçi mugallym (kömekçi)")
     room_type_id: int | None = None
     weekdays: list[int] | None = Field(default=None, description="Diňe şu günlerde (1=duşenbe ... 6=şenbe)")
+    latest_day: date | None = Field(default=None, description="Synag iň giç şu güne çenli")
 
 
 class ExamUpdate(BaseModel):
@@ -101,6 +102,7 @@ class ExamUpdate(BaseModel):
     assistant_id: int | None = None
     room_type_id: int | None = None
     weekdays: list[int] | None = None
+    latest_day: date | None = None
 
 
 class ExamRead(ReadBase, ExamCreate):

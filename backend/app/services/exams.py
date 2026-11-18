@@ -96,15 +96,27 @@ def build_exam_input(db: Session, session: m.ExamSession, time_limit_seconds: fl
             room_type_id=e.room_type_id, faculty_ids=frozenset(faculty_of[g] for g in group_ids),
             label=f"{owner} · {subjects[e.subject_id].name} · {teachers[e.examiner_id].name}",
             examiner_id=e.examiner_id, fixed_room_id=home, compact=bool(compact) and set(group_ids) <= compact,
-            weekdays=frozenset(e.weekdays) if e.weekdays else None,
+            weekdays=frozenset(e.weekdays) if e.weekdays else None, latest_day=e.latest_day,
         ))
     busy_t, busy_r, used = other_sessions_busy(db, session, slots)
     if used:
         warnings.append("Beýleki möwsümleriň synaglary hasaba alyndy (mugallym we otag çaknyşmasyn): " + ", ".join(used))
+    # Öňki raspisaniýe (çap edilen, ýok bolsa iň soňky taýýary): synaglar mümkin boldugyça ýerinde galýar
+    prev_sch = (db.scalar(select(m.ExamSchedule).where(m.ExamSchedule.session_id == session.id,
+                                                       m.ExamSchedule.published.is_(True))
+                          .order_by(m.ExamSchedule.id.desc()))
+                or db.scalar(select(m.ExamSchedule).where(m.ExamSchedule.session_id == session.id,
+                                                          m.ExamSchedule.status == m.TimetableStatus.done)
+                             .order_by(m.ExamSchedule.id.desc())))
+    previous = {}
+    if prev_sch is not None:
+        num = {p.id: p.number for p in session.periods}
+        for en in db.scalars(select(m.ExamEntry).where(m.ExamEntry.schedule_id == prev_sch.id)):
+            previous[str(en.exam_id)] = (en.day, num.get(en.period_id))
     rooms = solver_rooms(db)
     if session.own_rooms_only:  # umumy (fakultetsiz) otaglar ulanylmaýar
         rooms = [r for r in rooms if r.faculty_id is not None]
-    inp = ExamInput(busy_teachers=busy_t, busy_rooms=busy_r,
+    inp = ExamInput(busy_teachers=busy_t, busy_rooms=busy_r, previous=previous,
         slots=slots, rooms=rooms, exams=items, max_per_day=session.max_per_day,
         rest_days=session.rest_days, consultations=session.consultations,
         spread_days=session.rest_days + 2 if session.consultations else 0, time_limit_seconds=time_limit_seconds,

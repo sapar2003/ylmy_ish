@@ -82,3 +82,21 @@ def test_consultation_day_never_relaxed():
                                 time_limit_seconds=5, workers=2))
     assert not res.ok and res.status == "precheck_failed"
     assert "2 MH (Ç)" in res.issues[0] and "8 iş güni" in res.issues[0]
+
+
+def test_latest_day_and_stay_close_to_previous():
+    slots = _slots(date(2027, 1, 12), 12)
+    rooms = [Room(id=1, capacity=30, room_type_id=1), Room(id=2, capacity=30, room_type_id=1)]
+    days = sorted({s.day for s in slots})
+    last = days[7]
+    exams = [ExamItem(key=f"d{k}", group_ids=(1,), teacher_ids=(10 + k,), size=20, examiner_id=10 + k,
+                      latest_day=last) for k in range(4)]
+    res = solve_exams(ExamInput(slots=slots, rooms=rooms, exams=exams, rest_days=1, consultations=True,
+                                time_limit_seconds=5, workers=2))
+    slot = {s.id: s for s in slots}
+    assert res.ok and all(slot[p.slot_id].day <= last for p in res.placements)
+    too_many = [ExamItem(key=f"t{k}", group_ids=(2,), teacher_ids=(30 + k,), size=20, latest_day=days[3],
+                         label=f"2 MH (Ç) · D{k} · M") for k in range(3)]
+    bad = solve_exams(ExamInput(slots=slots, rooms=rooms, exams=too_many, rest_days=1, consultations=True,
+                                time_limit_seconds=5, workers=2))
+    assert not bad.ok and "2 MH (Ç)" in bad.issues[0]
