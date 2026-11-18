@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app import models as m
 from app.api.auth import FacultyScope
 from app.api.crud import NOT_YOURS, DbSession, get_or_404
-from app.api.scope import faculty_groups
+from app.api.scope import faculty_exam_sessions, faculty_groups
 from app.services.docx_export import DocOptions, exam_docx, timetable_docx
 from app.services.exams import exam_days
 
@@ -68,6 +68,8 @@ def timetable_word(timetable_id: int, db: DbSession, q: Annotated[DocQuery, Quer
 def exam_word(schedule_id: int, db: DbSession, q: Annotated[DocQuery, Query()], fid: FacultyScope):
     """Synag raspisaniýesi: her `page` aýry sahypa ("ARA SYNAGLARYŇ GÜN TERTIBI")."""
     sch = get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
+    if fid is not None and sch.session_id not in set(db.scalars(faculty_exam_sessions(fid))):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Synag raspisaniýesi tapylmady.")
     if sch.status != m.TimetableStatus.done:
         raise HTTPException(status.HTTP_409_CONFLICT, "Synag raspisaniýesi heniz taýýar däl.")
     pages = _pages(q, db, fid)

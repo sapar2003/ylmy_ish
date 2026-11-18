@@ -32,11 +32,12 @@ def validate_exam(db: Session, exam: m.Exam) -> None:
 router.include_router(build_crud_router(
     model=m.ExamSession, create_schema=s.ExamSessionCreate, update_schema=s.ExamSessionUpdate,
     read_schema=s.ExamSessionRead, prefix="/exam-sessions", tag="Synag möwsümleri", order_by=("starts_on", "name"),
+    scope=sc.EXAM_SESSION,
 ))
 router.include_router(build_crud_router(
     model=m.ExamPeriod, create_schema=s.ExamPeriodCreate, update_schema=s.ExamPeriodUpdate,
     read_schema=s.ExamPeriodRead, prefix="/exam-periods", tag="Synag wagtlary", filters=("session_id",),
-    search_field=None, order_by=("session_id", "number"),
+    search_field=None, order_by=("session_id", "number"), scope=sc.EXAM_PERIOD,
 ))
 router.include_router(build_crud_router(
     model=m.Exam, create_schema=s.ExamCreate, update_schema=s.ExamUpdate, read_schema=s.ExamRead,
@@ -46,6 +47,13 @@ router.include_router(build_crud_router(
 ))
 
 schedules = APIRouter(prefix="/exam-schedules", tags=["Synag raspisaniýesi"])
+
+
+def _visible(db: Session, sch: m.ExamSchedule, fid: int | None) -> m.ExamSchedule:
+    """Dekan başga fakultetiň möwsüminiň raspisaniýesini görmeýär (404)."""
+    if fid is not None and sch.session_id not in set(db.scalars(sc.faculty_exam_sessions(fid))):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Synag raspisaniýesi tapylmady.")
+    return sch
 
 
 def _read(db: Session, sch: m.ExamSchedule) -> s.ExamScheduleRead:
@@ -82,16 +90,18 @@ def create_schedule(
 
 
 @schedules.get("", response_model=list[s.ExamScheduleRead])
-def list_schedules(db: DbSession, session_id: int | None = None):
+def list_schedules(db: DbSession, fid: FacultyScope, session_id: int | None = None):
     stmt = select(m.ExamSchedule).order_by(m.ExamSchedule.id.desc())
     if session_id is not None:
         stmt = stmt.where(m.ExamSchedule.session_id == session_id)
+    if fid is not None:
+        stmt = stmt.where(m.ExamSchedule.session_id.in_(sc.faculty_exam_sessions(fid)))
     return [_read(db, sch) for sch in db.scalars(stmt)]
 
 
 @schedules.get("/{schedule_id}", response_model=s.ExamScheduleRead)
-def get_schedule(schedule_id: int, db: DbSession):
-    return _read(db, get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"))
+def get_schedule(schedule_id: int, db: DbSession, fid: FacultyScope):
+    return _read(db, _visible(db, get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"), fid))
 
 
 @schedules.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
@@ -110,7 +120,7 @@ def list_entries(
     room_id: int | None = None,
     fid: FacultyScope = None,
 ):
-    get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi")
+    _visible(db, get_or_404(db, m.ExamSchedule, schedule_id, "Synag raspisaniýesi"), fid)
     own = set(db.scalars(sc.faculty_groups(fid))) if fid is not None else None  # dekan: diňe öz toparlary
     rows = db.execute(
         select(m.ExamEntry, m.Exam, m.ExamPeriod)

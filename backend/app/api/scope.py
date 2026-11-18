@@ -82,3 +82,13 @@ ASSIGNMENT = Scope(
         select(m.CurriculumItem.id).where(_of_groups(m.CurriculumItem)(f))),
 )
 EXAM = Scope(owner=item_faculty, visible=_of_groups(m.Exam))
+
+
+def faculty_exam_sessions(faculty_id: int):
+    """Dekanyň synag möwsümleri: öz toparlarynyň synagy bolan möwsümler."""
+    return select(m.Exam.session_id).where(_of_groups(m.Exam)(faculty_id))
+
+
+# Synag möwsümi we wagtlary: dekan diňe öz möwsümlerini görýär, üýtgetmeýär (okuw bölümi düzýär).
+EXAM_SESSION = Scope(owner=lambda db, o: None, visible=lambda f: m.ExamSession.id.in_(faculty_exam_sessions(f)))
+EXAM_PERIOD = Scope(owner=lambda db, o: None, visible=lambda f: m.ExamPeriod.session_id.in_(faculty_exam_sessions(f)))
