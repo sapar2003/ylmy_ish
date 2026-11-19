@@ -28,8 +28,8 @@ async def no_stale_ui(request, call_next):
 
 
 @app.get("/health", tags=["Ulgam"])
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, str]:  # "app" bilen başga programmadan tapawutlandyrylýar
+    return {"status": "ok", "app": "raspisaniye"}
 
 
 # Flutter web build bar bolsa, şol bir serwerden berilýär (API we UI bir salgyda).
